@@ -1,10 +1,5 @@
 import { PieChart, Pie, Cell, Tooltip } from "recharts";
-
-const CHART_COLORS = [
-  "#008af8","#004266","#f57800","#2ab34b",
-  "#ffb800","#de2c2c","#5d778d","#00d4ff",
-  "#9b59b6","#e67e22","#1abc9c","#e74c3c",
-];
+import { getCompetencyColor } from "../utils/competencyColors";
 
 const COMPETENCY_SHORT = {
   "Improving Time Management, Organization, and Productivity": "Time Management",
@@ -51,11 +46,11 @@ export default function GlobalPieChart({ events }) {
   const grand = Object.values(totals).reduce((a, b) => a + b, 0);
 
   const data = competencies
-    .map((c, i) => ({
+    .map((c) => ({
       name: COMPETENCY_SHORT[c] || c,
       fullName: c,
       value: parseFloat(((totals[c] / grand) * 100).toFixed(1)),
-      fill: CHART_COLORS[i % CHART_COLORS.length],
+      fill: getCompetencyColor(c),
     }))
     .sort((a, b) => b.value - a.value);
 

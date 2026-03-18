@@ -3,7 +3,7 @@ export const mockData = {
     {
       id: 1,
       name: "Intake Debrief",
-      type: "intake",
+      type: "Intake Survey",
       analysis:
         "This foundational session established the coaching relationship and surfaced the coachee's primary development goals. The coachee demonstrated strong self-awareness and articulated a clear desire to grow into a more strategic leader. Primary themes included transitioning from individual contributor to people leader, building executive presence, and managing cross-functional stakeholders more effectively.",
       signals: {
@@ -25,7 +25,7 @@ export const mockData = {
     {
       id: 2,
       name: "One on One Coaching",
-      type: "1on1",
+      type: "One on One Coaching",
       analysis:
         "Focused session on leadership presence and executive communication. The coachee explored strategies for influencing without authority and building credibility with senior stakeholders. A new framework for structuring executive conversations was developed and practiced, with follow-up actions around upcoming leadership meetings.",
       signals: {
@@ -47,7 +47,7 @@ export const mockData = {
     {
       id: 3,
       name: "Ally Chat Session",
-      type: "ally",
+      type: "Ally Conversation",
       analysis:
         "A peer coaching exchange focusing on team dynamics and psychological safety. The coachee and their ally explored how inclusive leadership practices drive team performance, and discussed practical strategies for creating space for diverse voices. Themes of belonging and equity emerged as key levers for engagement.",
       signals: {
@@ -69,7 +69,7 @@ export const mockData = {
     {
       id: 4,
       name: "One on One Coaching",
-      type: "1on1",
+      type: "One on One Coaching",
       analysis:
         "Deep dive into conflict resolution and navigating difficult conversations. The coachee role-played scenarios involving feedback to underperforming direct reports and a disagreement with a peer leader. New mental models for separating intent from impact were introduced, with concrete scripts developed for upcoming challenging conversations.",
       signals: {
@@ -91,7 +91,7 @@ export const mockData = {
     {
       id: 5,
       name: "Ally Chat Session",
-      type: "ally",
+      type: "Ally Conversation",
       analysis:
         "This session explored change management communication strategies. With a major organizational restructure underway, the coachee practiced storytelling techniques to bring their team along on the journey. Emphasis was placed on communicating the 'why' behind change and maintaining psychological safety during transitions.",
       signals: {
@@ -113,7 +113,7 @@ export const mockData = {
     {
       id: 6,
       name: "360 Debrief",
-      type: "360",
+      type: "360 Debrief",
       analysis:
         "Comprehensive review of 360° feedback from the coachee's manager, peers, and direct reports. Identified strengths include deep technical credibility, commitment to results, and genuine care for the team. Development priorities center on strategic delegation, executive communication, and empowering team members to own outcomes. The coachee found the data energizing and committed to two focused development goals.",
       signals: {
@@ -135,7 +135,7 @@ export const mockData = {
     {
       id: 7,
       name: "Ally Chat Session",
-      type: "ally",
+      type: "Ally Conversation",
       analysis:
         "Focused on stress regulation and sustainable performance. The coachee shared challenges around maintaining energy through back-to-back meetings and a demanding project deadline. Practical techniques for recovery, boundary-setting, and energy management were explored. The session surfaced patterns of overcommitment and opened a conversation about saying no as a leadership skill.",
       signals: {
@@ -157,7 +157,7 @@ export const mockData = {
     {
       id: 8,
       name: "One on One Coaching",
-      type: "1on1",
+      type: "One on One Coaching",
       analysis:
         "This session marked a milestone in the coaching journey. The coachee reflected on measurable growth in leadership presence and communication since the intake. Explored growth mindset frameworks and developing a coaching approach to management — shifting from telling to asking. The coachee left with renewed clarity and confidence heading into Q2.",
       signals: {
@@ -179,7 +179,7 @@ export const mockData = {
     {
       id: 9,
       name: "One on One Coaching",
-      type: "1on1",
+      type: "One on One Coaching",
       analysis:
         "Focused on strategic delegation and team empowerment. The coachee explored how to shift from doing to leading — trusting the team with meaningful ownership. Practiced frameworks for giving delegation assignments with clear accountability, and discussed how to build a culture of high ownership on the team.",
       signals: {
@@ -201,7 +201,7 @@ export const mockData = {
     {
       id: 10,
       name: "Ally Chat Session",
-      type: "ally",
+      type: "Ally Conversation",
       analysis:
         "A rich peer conversation around cross-organizational collaboration and breaking down silos. The coachee shared a recent win in bridging two competing teams, and reflected on the mindsets and behaviors that made it work. Explored tactics for building informal influence networks and operating as a connector across the organization.",
       signals: {
@@ -223,7 +223,7 @@ export const mockData = {
     {
       id: 11,
       name: "One on One Coaching",
-      type: "1on1",
+      type: "One on One Coaching",
       analysis:
         "This session explored inclusive leadership and building diverse, high-performing teams. The coachee reflected on recent hiring decisions and team dynamics through an equity lens. Together, they developed a set of practical behaviors for fostering inclusion — from equitable meeting facilitation to sponsorship of underrepresented talent.",
       signals: {
@@ -245,7 +245,7 @@ export const mockData = {
     {
       id: 12,
       name: "Ally Chat Session",
-      type: "ally",
+      type: "Ally Conversation",
       analysis:
         "Session centered on organizational agility and adapting leadership in fast-changing environments. The coachee and their ally exchanged strategies for maintaining team clarity and momentum during periods of ambiguity. Key themes: communicating with confidence when you don't have all the answers, and modeling resilience for your team.",
       signals: {
