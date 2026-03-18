@@ -12,7 +12,14 @@ from app import models
 from app.adapters.gemini_adapter import GeminiAdapter
 from app.database import engine, get_db
 from app.ports.llm import AbstractLLM
-from app.schemas import EventIngestRequest, EventResponse, LLMEventResponse
+from app.schemas import (
+    EventIngestRequest,
+    EventResponse,
+    EventSummary,
+    LLMEventResponse,
+    NextActionResponse,
+    NextActionSuggestion,
+)
 
 # Configure logging to DEBUG level
 logging.basicConfig(
@@ -114,12 +121,19 @@ NORMALIZATION
 ANALYSIS REQUIREMENTS
 
 The "analysis" field must:
-- Be written in second person, directly addressing the user as "you" (e.g., "In this session, you demonstrated...", "You focused on...", "You committed to...").
+- Be written in second person, directly addressing the user as "you" in a natural, conversational tone.
+- Vary your opening phrases. Don't always start with "In this session". Use natural variations like:
+  * "You focused on..."
+  * "This conversation centered on..."
+  * "You demonstrated..."
+  * "The main theme here was..."
+  * "You worked on..."
+  * "Your primary focus was..."
 - Be concise (2-4 sentences).
 - Explain which competencies the user demonstrated most strongly and why.
 - Reference specific evidence from the text showing what the user said or did.
 - Avoid vague or generic statements.
-- If no evidence exists, state that clearly while still addressing the user directly (e.g., "In this session, you did not demonstrate specific behaviors...").
+- If no evidence exists, state that clearly while still addressing the user directly in a natural way.
 
 COMPETENCY MODEL
 
@@ -231,6 +245,32 @@ PROCESSING_DATE
 {processing_date}"""
 
 
+NEXT_ACTION_PROMPT = """You are a coaching assistant helping suggest the next conversation topic with Ally, an AI coaching companion.
+
+Based on the user's recent coaching journey, suggest a specific, actionable topic they could discuss with Ally. 
+
+The suggestion should:
+- Be written in second person, directly addressing the user (e.g., "You can talk to Ally about...")
+- Feel natural and conversational
+- Connect to patterns or themes in their recent work
+- Focus on one clear theme or challenge that would help them grow
+- Be specific enough to be actionable
+- Vary your opening phrases naturally
+
+RECENT EVENTS SUMMARY:
+{events_summary}
+
+Return exactly one JSON object with:
+- suggestion: A natural, conversational suggestion (1-2 sentences)
+- related_competencies: List of 1-3 competency names most relevant to this suggestion
+
+Example output:
+{{
+  "suggestion": "You can talk to Ally about managing stakeholder expectations, especially when priorities shift unexpectedly. This could help you build on your recent work with communication and influence.",
+  "related_competencies": ["Communicating Effectively and Influencing Stakeholders", "Developing Leadership Presence"]
+}}"""
+
+
 def get_llm() -> AbstractLLM:
     return GeminiAdapter(api_key=os.environ["GEMINI_API_KEY"])
 
@@ -273,3 +313,73 @@ async def create_event(
     db.commit()
     db.refresh(event)
     return event
+
+
+@app.get("/api/users/{user_id}/next-action", response_model=NextActionResponse)
+async def get_next_action(
+    user_id: str,
+    db: Session = Depends(get_db),
+    llm: AbstractLLM = Depends(get_llm),
+):
+    """
+    Generate a personalized suggestion for the next Ally conversation
+    based on the user's last 3 events.
+    """
+    # Fetch last 3 events for the user, ordered by date descending
+    recent_events = (
+        db.query(models.Event)
+        .filter(models.Event.user_id == user_id)
+        .order_by(models.Event.date.desc())
+        .limit(3)
+        .all()
+    )
+    
+    # If no events, return a default suggestion
+    if not recent_events:
+        return NextActionResponse(
+            suggestion="Start your journey by talking to Ally about your current leadership challenges and what you'd like to focus on.",
+            related_competencies=["Improving Time Management, Organization, and Productivity"],
+            based_on_events=[]
+        )
+    
+    # Format events summary for the LLM prompt
+    events_summary_parts = []
+    for idx, event in enumerate(recent_events, 1):
+        # Get top 2 competencies from signals
+        signals = event.signals if isinstance(event.signals, dict) else {}
+        top_competencies = sorted(
+            [(k, v) for k, v in signals.items() if v > 0],
+            key=lambda x: x[1],
+            reverse=True
+        )[:2]
+        
+        competencies_str = ", ".join([f"{comp} ({val:.1f}%)" for comp, val in top_competencies])
+        
+        events_summary_parts.append(
+            f"Event {idx} ({event.date}):\n"
+            f"  Type: {event.name}\n"
+            f"  Analysis: {event.analysis[:200]}...\n"
+            f"  Top competencies: {competencies_str if competencies_str else 'None detected'}"
+        )
+    
+    events_summary = "\n\n".join(events_summary_parts)
+    
+    # Call LLM to generate suggestion
+    async with llm:
+        suggestion_result: NextActionSuggestion = await llm.run_simple_completion(
+            system_prompt=NEXT_ACTION_PROMPT,
+            dto_class=NextActionSuggestion,
+            data={"events_summary": events_summary},
+        )
+    
+    # Build response with event summaries
+    event_summaries = [
+        EventSummary(id=event.id, name=event.name, date=event.date)
+        for event in recent_events
+    ]
+    
+    return NextActionResponse(
+        suggestion=suggestion_result.suggestion,
+        related_competencies=suggestion_result.related_competencies,
+        based_on_events=event_summaries
+    )

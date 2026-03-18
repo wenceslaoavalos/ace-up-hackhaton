@@ -1,4 +1,5 @@
 from datetime import date
+from typing import List
 
 from pydantic import BaseModel, Field
 
@@ -42,3 +43,20 @@ class EventResponse(BaseModel):
     date: date
 
     model_config = {"from_attributes": True}
+
+
+class EventSummary(BaseModel):
+    id: int
+    name: str
+    date: date
+
+
+class NextActionSuggestion(BaseModel):
+    suggestion: str
+    related_competencies: List[str]
+
+
+class NextActionResponse(BaseModel):
+    suggestion: str
+    related_competencies: List[str]
+    based_on_events: List[EventSummary]

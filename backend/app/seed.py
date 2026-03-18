@@ -465,12 +465,15 @@ _END_DATE = date(2026, 3, 1)
 SEED_USER_ID = "maya-001"
 
 
-def _seed_dates() -> list[date]:
-    n = len(_SEED_ORDER) - 1
+def _seed_dates(num_events: int) -> list[date]:
+    """Generate evenly distributed dates for the specified number of events."""
+    if num_events <= 1:
+        return [_START_DATE]
+    n = num_events - 1
     total_days = (_END_DATE - _START_DATE).days
     return [
         _START_DATE + timedelta(days=round(i * total_days / n))
-        for i in range(len(_SEED_ORDER))
+        for i in range(num_events)
     ]
 
 
@@ -497,9 +500,9 @@ async def seed_database(db: Session, get_llm_fn, signal_extraction_prompt: str) 
         logger.warning("GEMINI_API_KEY not set — skipping database seeding.")
         return
 
-    dates = _seed_dates()
     # Seed first 10 events: 1 intake + 9 follow-up sessions (3 one-on-one, 3 team, 3 ally)
     num_to_seed = min(10, len(_SEED_ORDER))
+    dates = _seed_dates(num_to_seed)
     logger.info(
         "Seeding database with %d events for user %s (%s → %s)…",
         num_to_seed, SEED_USER_ID, _START_DATE, _END_DATE,
