@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, Cell,
@@ -49,7 +49,9 @@ const DOT_R      = 14;   // dot radius (px)
 const LINE_Y     = 210;  // line Y from top of track container
 const V_OFFSET   = 110;  // vertical distance from line to dot centre
 const TRACK_H    = 410;  // total track height
-const TRACK_W    = 2600; // minimum track width (px)
+const MARGIN     = 100;  // px inset before first / after last dot
+const MIN_SLOT_W = 185;  // minimum px between adjacent slots
+const NUDGE_PX   = 20;   // horizontal nudge for same-date stacked events
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -210,9 +212,23 @@ function EventModal({ item, onClose }) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function Timeline({ events, nextStep, startDate, endDate }) {
-  const [selected, setSelected]         = useState(null);
-  const [activeType, setActiveType]     = useState(null); // legend filter
-  const scrollRef                       = useRef(null);
+  const [selected, setSelected]     = useState(null);
+  const [activeType, setActiveType] = useState(null);
+  const scrollRef                   = useRef(null);
+  const outerRef                    = useRef(null);
+  const [outerWidth, setOuterWidth] = useState(0);
+
+  // Measure the scrollable viewport width
+  useEffect(() => {
+    const el = outerRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(([entry]) => {
+      setOuterWidth(entry.contentRect.width);
+    });
+    obs.observe(el);
+    setOuterWidth(el.getBoundingClientRect().width);
+    return () => obs.disconnect();
+  }, []);
 
   // ── Filter ───────────────────────────────────────────────────────────────
 
@@ -228,18 +244,32 @@ export default function Timeline({ events, nextStep, startDate, endDate }) {
 
   const groups = useMemo(() => groupByDate(filtered), [filtered]);
 
-  // ── X positioning ────────────────────────────────────────────────────────
+  // ── Pixel-based slot positions ────────────────────────────────────────────
 
-  const timestamps = groups.map((g) => new Date(g.date).getTime());
-  const minT = timestamps.length ? Math.min(...timestamps) : 0;
-  const maxT = timestamps.length ? Math.max(...timestamps) : 0;
-  const span = maxT - minT || 1;
+  const totalSlots = groups.length + (nextStep ? 1 : 0);
 
-  // 2% → 90% range for regular events; next-step always at 95%
-  const xPct = (dateStr) => {
-    if (groups.length <= 1) return 46;
-    return ((new Date(dateStr).getTime() - minT) / span) * 88 + 2;
+  // Minimum track width to keep slots at least MIN_SLOT_W apart
+  const minTrackW = totalSlots <= 1
+    ? MARGIN * 2 + 200
+    : MARGIN * 2 + (totalSlots - 1) * MIN_SLOT_W;
+
+  // Fill the container when few events; scroll when many
+  const trackWidth = outerWidth > 0 ? Math.max(outerWidth, minTrackW) : minTrackW;
+
+  // Pixel X centre for slot index i
+  const slotXPx = (i) => {
+    if (totalSlots <= 1) return trackWidth / 2;
+    return MARGIN + (i / (totalSlots - 1)) * (trackWidth - 2 * MARGIN);
   };
+
+  const groupSlotX = groups.map((_, i) => slotXPx(i));
+  const nextStepX  = nextStep ? slotXPx(totalSlots - 1) : null;
+
+  // Line endpoints match first and last slot
+  const lineLeft  = slotXPx(0);
+  const lineRight = slotXPx(totalSlots - 1);
+
+  const canScroll = trackWidth > outerWidth + 2;
 
   // ── Scroll helpers ───────────────────────────────────────────────────────
 
@@ -324,9 +354,9 @@ export default function Timeline({ events, nextStep, startDate, endDate }) {
           No sessions match the current filters.
         </div>
       ) : (
-        <div style={{ position: "relative" }}>
-          {/* Scroll arrows */}
-          {["left","right"].map((dir) => (
+        <div style={{ position: "relative" }} ref={outerRef}>
+          {/* Scroll arrows — only when content overflows */}
+          {canScroll && ["left","right"].map((dir) => (
             <button
               key={dir}
               onClick={() => scroll(dir === "right" ? 1 : -1)}
@@ -353,34 +383,36 @@ export default function Timeline({ events, nextStep, startDate, endDate }) {
           {/* Scrollable viewport */}
           <div
             ref={scrollRef}
-            style={{ overflowX: "auto", padding: "0 8px", scrollbarWidth: "thin" }}
+            style={{ overflowX: "auto", scrollbarWidth: "thin" }}
           >
-            <div style={{ position: "relative", height: TRACK_H, minWidth: TRACK_W }}>
+            <div style={{ position: "relative", height: TRACK_H, width: trackWidth }}>
 
-              {/* Gradient line */}
+              {/* Gradient line — from first slot to last slot */}
               <div style={{
                 position: "absolute",
-                top: LINE_Y, left: "2%", right: "2%",
+                top: LINE_Y,
+                left: lineLeft,
+                width: lineRight - lineLeft,
                 height: 5, borderRadius: 5,
                 background: "linear-gradient(to right, #008af8 35%, #00d4ff 101%)",
               }} />
 
               {/* Start cap */}
               <div style={{
-                position: "absolute", top: LINE_Y, left: "2%",
+                position: "absolute", top: LINE_Y, left: lineLeft,
                 width: 14, height: 14, borderRadius: "50%",
                 background: "#008af8",
                 transform: "translate(-50%, -50%)",
               }} />
 
               {/* Event groups */}
-              {groups.map((group) => {
-                const xp = xPct(group.date);
+              {groups.map((group, gIdx) => {
+                const baseX = groupSlotX[gIdx];
                 return group.events.map((event, idx) => {
-                  const cfg    = TYPE_CONFIG[event.type] || TYPE_CONFIG["1on1"];
+                  const cfg     = TYPE_CONFIG[event.type] || TYPE_CONFIG["1on1"];
                   const isAbove = idx % 2 === 0;
-                  const xNudge = group.events.length > 1 ? (idx === 0 ? -2 : 2) : 0;
-                  const xFinal = xp + xNudge;
+                  const nudge   = group.events.length > 1 ? (idx === 0 ? -NUDGE_PX : NUDGE_PX) : 0;
+                  const xPx     = baseX + nudge;
 
                   const dotCY      = LINE_Y + (isAbove ? -V_OFFSET : V_OFFSET);
                   const connTop    = isAbove ? dotCY + DOT_R : LINE_Y;
@@ -393,7 +425,7 @@ export default function Timeline({ events, nextStep, startDate, endDate }) {
                       {/* Connector */}
                       <div style={{
                         position: "absolute",
-                        left: `${xFinal}%`, top: connTop,
+                        left: xPx, top: connTop,
                         width: 1.5, height: connH,
                         background: cfg.color, opacity: 0.4,
                         transform: "translateX(-50%)",
@@ -404,7 +436,7 @@ export default function Timeline({ events, nextStep, startDate, endDate }) {
                         onClick={() => setSelected(event)}
                         style={{
                           position: "absolute",
-                          left: `${xFinal}%`, top: dotCY,
+                          left: xPx, top: dotCY,
                           width: DOT_R * 2, height: DOT_R * 2,
                           borderRadius: "50%",
                           background: cfg.color,
@@ -428,7 +460,7 @@ export default function Timeline({ events, nextStep, startDate, endDate }) {
                       {/* Date */}
                       <div style={{
                         position: "absolute",
-                        left: `${xFinal}%`, top: dateCssTop,
+                        left: xPx, top: dateCssTop,
                         transform: "translateX(-50%)",
                         fontSize: 12, color: "#7a8086",
                         fontWeight: 600, whiteSpace: "nowrap",
@@ -442,7 +474,7 @@ export default function Timeline({ events, nextStep, startDate, endDate }) {
                         onClick={() => setSelected(event)}
                         style={{
                           position: "absolute",
-                          left: `${xFinal}%`, top: nameCssTop,
+                          left: xPx, top: nameCssTop,
                           transform: "translateX(-50%)",
                           width: 140,
                           textAlign: "center",
@@ -460,8 +492,8 @@ export default function Timeline({ events, nextStep, startDate, endDate }) {
               })}
 
               {/* ── Next Step ── */}
-              {nextStep && (() => {
-                const xp      = 95;
+              {nextStep && nextStepX !== null && (() => {
+                const xPx     = nextStepX;
                 const cfg     = TYPE_CONFIG.nextStep;
                 const dotCY   = LINE_Y - V_OFFSET;
                 const connTop = dotCY + DOT_R;
@@ -471,7 +503,7 @@ export default function Timeline({ events, nextStep, startDate, endDate }) {
                   <div key="nextStep">
                     <div style={{
                       position: "absolute",
-                      left: `${xp}%`, top: connTop,
+                      left: xPx, top: connTop,
                       width: 1.5, height: connH,
                       background: cfg.color, opacity: 0.55,
                       transform: "translateX(-50%)",
@@ -482,7 +514,7 @@ export default function Timeline({ events, nextStep, startDate, endDate }) {
                       onClick={() => setSelected({ ...nextStep, _isNextStep: true })}
                       style={{
                         position: "absolute",
-                        left: `${xp}%`, top: dotCY,
+                        left: xPx, top: dotCY,
                         width: DOT_R * 2, height: DOT_R * 2,
                         borderRadius: 3,
                         background: cfg.color,
@@ -501,10 +533,10 @@ export default function Timeline({ events, nextStep, startDate, endDate }) {
                       }}
                     />
 
-                    {/* Date */}
+                    {/* Label */}
                     <div style={{
                       position: "absolute",
-                      left: `${xp}%`, top: dotCY + DOT_R + 8,
+                      left: xPx, top: dotCY + DOT_R + 8,
                       transform: "translateX(-50%)",
                       fontSize: 12, color: cfg.color,
                       fontWeight: 700, whiteSpace: "nowrap",
@@ -517,7 +549,7 @@ export default function Timeline({ events, nextStep, startDate, endDate }) {
                       onClick={() => setSelected({ ...nextStep, _isNextStep: true })}
                       style={{
                         position: "absolute",
-                        left: `${xp}%`, top: dotCY - DOT_R - 52,
+                        left: xPx, top: dotCY - DOT_R - 52,
                         transform: "translateX(-50%)",
                         width: 140, textAlign: "center",
                         fontSize: 12, fontWeight: 700,
