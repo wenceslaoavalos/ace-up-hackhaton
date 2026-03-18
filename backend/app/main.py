@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import date
@@ -12,6 +13,12 @@ from app.adapters.gemini_adapter import GeminiAdapter
 from app.database import engine, get_db
 from app.ports.llm import AbstractLLM
 from app.schemas import EventIngestRequest, EventResponse, LLMEventResponse
+
+# Configure logging to DEBUG level
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 
 @asynccontextmanager
@@ -49,8 +56,8 @@ Return exactly one JSON object and nothing else.
 OUTPUT FORMAT
 
 {{
-  "name": "Intake debrief",
-  "analysis": "Short synthesis explaining why the strongest competencies were detected and what evidence supports them.",
+  "name": "A short descriptive name for this event based on its content (e.g., 'Time management coaching', 'Team priorities discussion', 'Stakeholder communication planning')",
+  "analysis": "Short synthesis written in second person (addressing 'you') explaining what the user demonstrated in this session and what evidence supports the detected competencies. Example: 'In this session, you focused on improving time management by...'",
   "signals": {{
     "Improving Time Management, Organization, and Productivity": 0,
     "Developing Leadership Presence": 0,
@@ -107,13 +114,12 @@ NORMALIZATION
 ANALYSIS REQUIREMENTS
 
 The "analysis" field must:
-- be concise but specific,
-- describe the strongest signals first,
-- mention why those signals appeared,
-- mention lower-signal or absent competencies when meaningful,
-- refer to concrete themes from the text,
-- not quote long passages,
-- not mention hidden reasoning or internal scoring mechanics.
+- Be written in second person, directly addressing the user as "you" (e.g., "In this session, you demonstrated...", "You focused on...", "You committed to...").
+- Be concise (2-4 sentences).
+- Explain which competencies the user demonstrated most strongly and why.
+- Reference specific evidence from the text showing what the user said or did.
+- Avoid vague or generic statements.
+- If no evidence exists, state that clearly while still addressing the user directly (e.g., "In this session, you did not demonstrate specific behaviors...").
 
 COMPETENCY MODEL
 
@@ -219,10 +225,10 @@ Do not optimize for sounding impressive.
 Optimize for consistency, traceability, and reliability across varied workplace event text.
 
 INPUT
-{{event_text}}
+{event_text}
 
 PROCESSING_DATE
-{{processing_date}}"""
+{processing_date}"""
 
 
 def get_llm() -> AbstractLLM:
@@ -259,7 +265,10 @@ async def create_event(
                 "processing_date": str(date.today()),
             },
         )
-    event = models.Event(user_id=payload.user_id, **llm_result.model_dump())
+    # Convert CompetencySignals to dict for storage and override name with event_type
+    result_dict = llm_result.model_dump(by_alias=True)
+    result_dict["name"] = payload.event_type
+    event = models.Event(user_id=payload.user_id, **result_dict)
     db.add(event)
     db.commit()
     db.refresh(event)

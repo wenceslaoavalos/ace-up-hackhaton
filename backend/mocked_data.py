@@ -1,23 +1,24 @@
-"""
-Seed data and startup seeding logic for Maya Fernandez's coaching journey.
+import pytest
 
-21 events interleaved (individual coaching, team sessions, ally chats)
-progressing from June 1, 2025 through March 1, 2026.
-"""
-
-import asyncio
-import logging
-import os
-import traceback
-from datetime import date, timedelta
-
-from sqlalchemy.orm import Session
-
-logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Raw event data
-# ---------------------------------------------------------------------------
+intake_score = {
+  "name": "Intake debrief",
+  "analysis": "The strongest signal is Collaborating Across The Organization because all four related micro-behaviors appear as positive signals: actively seeking collaboration, keeping a clear line of sight to organizational goals, seeking others' input, and collaborating rather than competing. Strong secondary signals appear in Growing Emotional Intelligence, Leading with a Growth Mindset, and Building and Leading Inclusive Teams, with repeated evidence of empathy, emotional awareness, learning orientation, and inclusion of diverse perspectives. Communicating Effectively and Influencing Stakeholders, Managing Conflicts and Difficult Conversations, and Facilitating Effective Change Management show moderate signal, suggesting capability is present but not yet fully consistent. Lower-signal areas are Improving Time Management, Organization, and Productivity, Developing Leadership Presence, Transitioning from Subject Matter Expert to Leadership, Regulating Stress and Building Resilience, and Developing a Coaching Approach to Management, which aligns with the respondent's stated desire to improve focus, confidence, delegation, and handling difficult situations.",
+  "signals": {
+    "Improving Time Management, Organization, and Productivity": 4.1667,
+    "Developing Leadership Presence": 4.1667,
+    "Transitioning from Subject Matter Expert to Leadership": 4.1667,
+    "Communicating Effectively and Influencing Stakeholders": 8.3333,
+    "Growing Emotional Intelligence": 12.5,
+    "Managing Conflicts and Difficult Conversations": 8.3333,
+    "Regulating Stress and Building Resilience": 4.1667,
+    "Leading with a Growth Mindset": 12.5,
+    "Facilitating Effective Change Management": 8.3333,
+    "Collaborating Across The Organization": 16.6667,
+    "Developing a Coaching Approach to Management": 4.1667,
+    "Building and Leading Inclusive Teams": 12.5
+  },
+  "date": "2026-03-18"
+}
 
 TRANSCRIPTS: list[str] = [
     """Coach: What feels most important to work on today?
@@ -424,124 +425,3 @@ ALLY_CHAT_CONVERSATIONS: list[list[dict[str, str]]] = [
         {"role": "maya", "content": "I will wait two minutes before responding to triggering messages and ask one clarifying question before jumping to action."},
     ],
 ]
-
-
-def format_chat(messages: list[dict[str, str]]) -> str:
-    """Convert chat message list into plain text for the LLM prompt."""
-    return "\n".join(f"{m['role']}: {m['content']}" for m in messages)
-
-
-# ---------------------------------------------------------------------------
-# Ordered seed sequence: intake first, then interleaved sessions
-# Each tuple is (event_text, event_type)
-# ---------------------------------------------------------------------------
-
-_SEED_ORDER: list[tuple[str, str]] = [
-    (TRANSCRIPTS[0], "intake_survey"),                              # 1  intake: time mgmt / strategic work
-    (COMPLEX_TEAM_TRANSCRIPTS[0], "team_coaching"),                 # 2  team: priorities & productivity
-    (format_chat(ALLY_CHAT_CONVERSATIONS[0]), "ally_conversation"), # 3  ally: priorities
-    (TRANSCRIPTS[1], "1_o_1"),                                      # 4  individual: leadership presence
-    (COMPLEX_TEAM_TRANSCRIPTS[1], "team_coaching"),                 # 5  team: stakeholder communication
-    (format_chat(ALLY_CHAT_CONVERSATIONS[1]), "ally_conversation"), # 6  ally: stakeholder presentation
-    (TRANSCRIPTS[2], "1_o_1"),                                      # 7  individual: change management
-    (COMPLEX_TEAM_TRANSCRIPTS[2], "team_coaching"),                 # 8  team: SME to leader transition
-    (format_chat(ALLY_CHAT_CONVERSATIONS[2]), "ally_conversation"), # 9  ally: coaching approach
-    (TRANSCRIPTS[3], "1_o_1"),                                      # 10 individual: conflict management
-    (COMPLEX_TEAM_TRANSCRIPTS[3], "team_coaching"),                 # 11 team: conflict & difficult convos
-    (format_chat(ALLY_CHAT_CONVERSATIONS[3]), "ally_conversation"), # 12 ally: conflict facilitation
-    (TRANSCRIPTS[4], "1_o_1"),                                      # 13 individual: stress & resilience
-    (COMPLEX_TEAM_TRANSCRIPTS[4], "team_coaching"),                 # 14 team: change process
-    (format_chat(ALLY_CHAT_CONVERSATIONS[4]), "ally_conversation"), # 15 ally: change management
-    (TRANSCRIPTS[5], "1_o_1"),                                      # 16 individual: coaching approach
-    (COMPLEX_TEAM_TRANSCRIPTS[5], "team_coaching"),                 # 17 team: team resilience
-    (format_chat(ALLY_CHAT_CONVERSATIONS[5]), "ally_conversation"), # 18 ally: stress resilience
-    (TRANSCRIPTS[6], "1_o_1"),                                      # 19 individual: collaboration
-    (COMPLEX_TEAM_TRANSCRIPTS[6], "team_coaching"),                 # 20 team: cross-functional collab
-    (TRANSCRIPTS[7], "1_o_1"),                                      # 21 individual: growth mindset
-]
-
-_START_DATE = date(2025, 6, 1)
-_END_DATE = date(2026, 3, 1)
-SEED_USER_ID = "maya-001"
-
-
-def _seed_dates() -> list[date]:
-    n = len(_SEED_ORDER) - 1
-    total_days = (_END_DATE - _START_DATE).days
-    return [
-        _START_DATE + timedelta(days=round(i * total_days / n))
-        for i in range(len(_SEED_ORDER))
-    ]
-
-
-async def seed_database(db: Session, get_llm_fn, signal_extraction_prompt: str) -> None:
-    """
-    Populate the database with Maya's full coaching journey if it is empty.
-
-    Uses the same ingest logic as POST /api/events — calls the LLM for each
-    event with its assigned historical processing date.
-
-    Args:
-        db: SQLAlchemy session
-        get_llm_fn: callable returning a fresh AbstractLLM instance
-        signal_extraction_prompt: the full prompt template from main.py
-    """
-    from app import models
-    from app.schemas import LLMEventResponse
-
-    if db.query(models.Event).first():
-        logger.info("Database already seeded — skipping.")
-        return
-
-    if not os.environ.get("GEMINI_API_KEY"):
-        logger.warning("GEMINI_API_KEY not set — skipping database seeding.")
-        return
-
-    dates = _seed_dates()
-    # Seed first 10 events: 1 intake + 9 follow-up sessions (3 one-on-one, 3 team, 3 ally)
-    num_to_seed = min(10, len(_SEED_ORDER))
-    logger.info(
-        "Seeding database with %d events for user %s (%s → %s)…",
-        num_to_seed, SEED_USER_ID, _START_DATE, _END_DATE,
-    )
-
-    for i, ((event_text, event_type), event_date) in enumerate(zip(_SEED_ORDER[:num_to_seed], dates[:num_to_seed]), start=1):
-        try:
-            logger.info("  [%d/%d] Processing %s event dated %s...", i, num_to_seed, event_type, event_date)
-            logger.debug("  [%d/%d] Event text preview (first 200 chars): %s...", i, num_to_seed, event_text[:200] if event_text else "EMPTY")
-            logger.info("  [%d/%d] Calling LLM API...", i, num_to_seed)
-            llm = get_llm_fn()
-            async with llm:
-                llm_result: LLMEventResponse = await llm.run_simple_completion(
-                    system_prompt=signal_extraction_prompt,
-                    dto_class=LLMEventResponse,
-                    data={
-                        "event_text": event_text,
-                        "processing_date": str(event_date),
-                    },
-                )
-            logger.info("  [%d/%d] LLM response received", i, num_to_seed)
-            # Convert CompetencySignals to dict for storage and override name with event_type
-            result_dict = llm_result.model_dump(by_alias=True)
-            result_dict["name"] = event_type
-            event = models.Event(user_id=SEED_USER_ID, **result_dict)
-            db.add(event)
-            db.commit()
-            logger.info("  [%d/%d] ✓ Seeded %s event dated %s", i, num_to_seed, event_type, event_date)
-            
-            # Add delay to avoid rate limiting
-            if i < num_to_seed:
-                await asyncio.sleep(2)
-        except Exception as exc:
-            logger.error(
-                "  [%d/%d] Failed to seed event dated %s: %s",
-                i, num_to_seed, event_date, exc,
-            )
-            logger.error("Full traceback:\n%s", traceback.format_exc())
-            logger.error("Exception type: %s", type(exc).__name__)
-            logger.error("Exception args: %s", exc.args)
-            if hasattr(exc, '__cause__') and exc.__cause__:
-                logger.error("Caused by: %s", exc.__cause__)
-            db.rollback()
-
-    logger.info("Seeding complete.")

@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Any, cast, Self
 
 import pydantic
@@ -6,6 +7,30 @@ import tenacity
 from google import genai
 
 from app.ports.llm import AbstractLLM, TGeneric
+
+logger = logging.getLogger(__name__)
+
+
+def _clean_schema_for_gemini(schema: Any) -> Any:
+    """Remove unsupported fields from Pydantic schema for Gemini API."""
+    if isinstance(schema, dict):
+        # Create a new dict without additionalProperties
+        cleaned = {}
+        for key, value in schema.items():
+            if key == "additionalProperties":
+                continue
+            # Recursively clean nested values
+            if isinstance(value, dict):
+                cleaned[key] = _clean_schema_for_gemini(value)
+            elif isinstance(value, list):
+                cleaned[key] = [_clean_schema_for_gemini(item) for item in value]
+            else:
+                cleaned[key] = value
+        return cleaned
+    elif isinstance(schema, list):
+        return [_clean_schema_for_gemini(item) for item in schema]
+    else:
+        return schema
 
 
 class GeminiAdapter(AbstractLLM):
@@ -58,14 +83,18 @@ class GeminiAdapter(AbstractLLM):
         model_name: str,
     ) -> TGeneric:
         try:
+            # Get Pydantic schema and clean it for Gemini
+            schema = dto_class.model_json_schema()
+            logger.debug("Original schema: %s", json.dumps(schema, indent=2))
+            cleaned_schema = _clean_schema_for_gemini(schema)
+            logger.debug("Cleaned schema: %s", json.dumps(cleaned_schema, indent=2))
+            
             response = await client.models.generate_content(
                 model=model_name,
                 contents=prompt,
                 config={
                     "response_mime_type": "application/json",
-                    "response_schema": dto_class,
-                    "automatic_function_calling": {"disable": True},
-                    "thinking_config": {"thinking_budget": 400},
+                    "response_schema": cleaned_schema,
                 },
             )
             return dto_class.model_validate_json(response.text)
