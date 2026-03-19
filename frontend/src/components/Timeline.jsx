@@ -3,23 +3,17 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, Cell,
 } from "recharts";
+import { getCompetencyColor } from "../utils/competencyColors";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 const TYPE_CONFIG = {
-  intake:   { color: "#004266", label: "Intake Debrief" },
-  "1on1":   { color: "#008af8", label: "1-on-1 Coaching" },
-  ally:     { color: "#2ab34b", label: "Ally Chat Session" },
-  "360":    { color: "#f57800", label: "360 Debrief" },
-  nextStep: { color: "#ffb800", label: "Next Step" },
-};
-
-const ACTION_LABELS = {
-  roleplay:       "Role Play Session",
-  "1on1coaching": "1-on-1 Coaching",
-  groupcoaching:  "Group Coaching",
-  assessment:     "Assessment",
-  workshop:       "Workshop",
+  "Intake Survey":        { color: "#004266", label: "Intake Survey" },
+  "One on One Coaching":  { color: "#008af8", label: "One on One Coaching" },
+  "Ally Conversation":    { color: "#2ab34b", label: "Ally Conversation" },
+  "Team Coaching":        { color: "#9b59b6", label: "Team Coaching" },
+  "360 Debrief":          { color: "#f57800", label: "360 Debrief" },
+  nextStep:               { color: "#ffb800", label: "Next Step" },
 };
 
 const COMPETENCY_SHORT = {
@@ -36,12 +30,6 @@ const COMPETENCY_SHORT = {
   "Developing a Coaching Approach to Management":             "Coaching Approach",
   "Building and Leading Inclusive Teams":                     "Inclusive Teams",
 };
-
-const CHART_COLORS = [
-  "#008af8","#004266","#f57800","#2ab34b",
-  "#ffb800","#de2c2c","#5d778d","#00d4ff",
-  "#9b59b6","#e67e22","#1abc9c","#e74c3c",
-];
 
 // ─── Dimensions ───────────────────────────────────────────────────────────────
 
@@ -75,20 +63,32 @@ const groupByDate = (events) => {
 
 // ─── Event Detail Modal ───────────────────────────────────────────────────────
 
-function EventModal({ item, onClose }) {
+function EventModal({ item, onClose, onRegenerateNextStep }) {
+  const [isRegenerating, setIsRegenerating] = useState(false);
   if (!item) return null;
   const isNextStep = item._isNextStep;
-  const cfg = TYPE_CONFIG[isNextStep ? "nextStep" : item.type] || TYPE_CONFIG["1on1"];
+  const cfg = TYPE_CONFIG[isNextStep ? "nextStep" : item.type] || TYPE_CONFIG["One on One Coaching"];
 
   const chartData = isNextStep ? [] : Object.entries(item.signals || {})
     .filter(([, v]) => v > 0)
     .sort(([, a], [, b]) => b - a)
-    .map(([name, value], i) => ({
+    .map(([name, value]) => ({
       name: COMPETENCY_SHORT[name] || name,
       fullName: name,
       value,
-      fill: CHART_COLORS[i % CHART_COLORS.length],
+      fill: getCompetencyColor(name),
     }));
+
+  const handleRegenerate = async () => {
+    if (!onRegenerateNextStep || isRegenerating) return;
+
+    setIsRegenerating(true);
+    try {
+      await onRegenerateNextStep();
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
 
   return (
     <div
@@ -111,16 +111,39 @@ function EventModal({ item, onClose }) {
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22 }}>
           <div>
-            <span style={{
-              background: cfg.color,
-              color: isNextStep ? "#343a40" : "#fff",
-              borderRadius: 20, padding: "4px 14px",
-              fontSize: 11, fontWeight: 600,
-              fontFamily: "Poppins, sans-serif",
-              textTransform: "uppercase", letterSpacing: "0.08em",
-            }}>
-              {cfg.label}
-            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{
+                background: cfg.color,
+                color: isNextStep ? "#343a40" : "#fff",
+                borderRadius: 20, padding: "4px 14px",
+                fontSize: 11, fontWeight: 600,
+                fontFamily: "Poppins, sans-serif",
+                textTransform: "uppercase", letterSpacing: "0.08em",
+              }}>
+                {cfg.label}
+              </span>
+              {isNextStep && (
+                <button
+                  type="button"
+                  onClick={handleRegenerate}
+                  disabled={isRegenerating}
+                  style={{
+                    background: "#fff7db",
+                    color: "#9b6b00",
+                    border: "1px solid #ffd76a",
+                    borderRadius: 999,
+                    padding: "5px 10px",
+                    fontFamily: "Poppins, sans-serif",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: isRegenerating ? "wait" : "pointer",
+                    opacity: isRegenerating ? 0.7 : 1,
+                  }}
+                >
+                  {isRegenerating ? "Regenerating..." : "Regenerate"}
+                </button>
+              )}
+            </div>
             <h2 style={{
               fontFamily: '"Source Serif Pro", serif',
               fontSize: 26, fontWeight: 600,
@@ -159,11 +182,29 @@ function EventModal({ item, onClose }) {
             }}>⚡</div>
             <div>
               <p style={{ fontFamily: "Poppins, sans-serif", fontSize: 12, color: "#7a8086", margin: 0, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Upcoming Activity
+                Suggested Next Step
               </p>
-              <p style={{ fontFamily: '"Source Serif Pro", serif', fontSize: 22, color: "#004266", margin: "6px 0 0", fontWeight: 600 }}>
-                {ACTION_LABELS[item.action_id] || item.action_id}
+              <p style={{ fontFamily: "Poppins, sans-serif", fontSize: 15, color: "#585f66", margin: "8px 0 0", lineHeight: 1.7, fontWeight: 500 }}>
+                {item.suggestion || item.name || "Continue the coaching journey with Ally."}
               </p>
+              <button
+                type="button"
+                style={{
+                  marginTop: 18,
+                  background: "#008af8",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 999,
+                  padding: "10px 18px",
+                  fontFamily: "Poppins, sans-serif",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  boxShadow: "0 8px 18px rgba(0,138,248,0.22)",
+                }}
+              >
+                New chat with Ally
+              </button>
             </div>
           </div>
         )}
@@ -183,12 +224,12 @@ function EventModal({ item, onClose }) {
               <h4 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 13, color: "#004266", marginBottom: 16, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                 Competency Signals
               </h4>
-              <ResponsiveContainer width="100%" height={chartData.length * 34}>
+              <ResponsiveContainer width="100%" height={Math.max(chartData.length * 44, 140)}>
                 <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 48, left: 148, bottom: 0 }}>
                   <XAxis type="number" domain={[0, 35]} tickFormatter={(v) => `${v}%`}
                     tick={{ fontFamily: "Poppins", fontSize: 11, fill: "#7a8086" }}
                     axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="name" width={140}
+                  <YAxis type="category" dataKey="name" width={160} interval={0}
                     tick={{ fontFamily: "Poppins", fontSize: 12, fill: "#585f66" }}
                     axisLine={false} tickLine={false} />
                   <Tooltip
@@ -211,7 +252,7 @@ function EventModal({ item, onClose }) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export default function Timeline({ events, nextStep, startDate, endDate }) {
+export default function Timeline({ events, nextStep, startDate, endDate, onRegenerateNextStep }) {
   const [selected, setSelected]     = useState(null);
   const [activeType, setActiveType] = useState(null);
   const scrollRef                   = useRef(null);
@@ -229,6 +270,12 @@ export default function Timeline({ events, nextStep, startDate, endDate }) {
     setOuterWidth(el.getBoundingClientRect().width);
     return () => obs.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (selected?._isNextStep) {
+      setSelected(nextStep ? { ...nextStep, _isNextStep: true } : null);
+    }
+  }, [nextStep, selected?._isNextStep]);
 
   // ── Filter ───────────────────────────────────────────────────────────────
 
@@ -409,7 +456,7 @@ export default function Timeline({ events, nextStep, startDate, endDate }) {
               {groups.map((group, gIdx) => {
                 const baseX = groupSlotX[gIdx];
                 return group.events.map((event, idx) => {
-                  const cfg     = TYPE_CONFIG[event.type] || TYPE_CONFIG["1on1"];
+                  const cfg     = TYPE_CONFIG[event.type] || TYPE_CONFIG["One on One Coaching"];
                   const isAbove = idx % 2 === 0;
                   const nudge   = group.events.length > 1 ? (idx === 0 ? -NUDGE_PX : NUDGE_PX) : 0;
                   const xPx     = baseX + nudge;
@@ -571,6 +618,7 @@ export default function Timeline({ events, nextStep, startDate, endDate }) {
       <EventModal
         item={selected}
         onClose={() => setSelected(null)}
+        onRegenerateNextStep={onRegenerateNextStep}
       />
     </div>
   );
