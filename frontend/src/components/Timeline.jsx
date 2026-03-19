@@ -3,6 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, Cell,
 } from "recharts";
+import ReactMarkdown from "react-markdown";
 import { getCompetencyColor } from "../utils/competencyColors";
 import DateFilter from "./DateFilter";
 
@@ -185,9 +186,31 @@ function EventModal({ item, onClose, onRegenerateNextStep }) {
               <p style={{ fontFamily: "Poppins, sans-serif", fontSize: 12, color: "#7a8086", margin: 0, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                 Suggested Next Step
               </p>
-              <p style={{ fontFamily: "Poppins, sans-serif", fontSize: 15, color: "#585f66", margin: "8px 0 0", lineHeight: 1.7, fontWeight: 500 }}>
+              <ReactMarkdown
+                components={{
+                  p: ({ children }) => (
+                    <p
+                      style={{
+                        fontFamily: "Poppins, sans-serif",
+                        fontSize: 15,
+                        color: "#585f66",
+                        margin: "8px 0 0",
+                        lineHeight: 1.7,
+                        fontWeight: 500,
+                      }}
+                    >
+                      {children}
+                    </p>
+                  ),
+                  strong: ({ children }) => (
+                    <strong style={{ color: "#343a40", fontWeight: 700 }}>
+                      {children}
+                    </strong>
+                  ),
+                }}
+              >
                 {item.suggestion || item.name || "Continue the coaching journey with Ally."}
-              </p>
+              </ReactMarkdown>
               <button
                 type="button"
                 style={{

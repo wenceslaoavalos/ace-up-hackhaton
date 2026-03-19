@@ -27,15 +27,14 @@ export default function LoadingState({
           gap: 16,
         }}
       >
-        <div
-          className="app-spinner"
-          aria-hidden="true"
+        <img
+          src="https://i.imgur.com/QpvV45M.gif"
+          alt="AceUp Ally loading"
           style={{
-            width: 44,
-            height: 44,
-            borderRadius: "50%",
-            border: "4px solid rgba(0,138,248,0.14)",
-            borderTopColor: "#008af8",
+            width: 88,
+            height: 88,
+            objectFit: "contain",
+            display: "block",
           }}
         />
 

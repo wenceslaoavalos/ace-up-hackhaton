@@ -1,3 +1,5 @@
+import ReactMarkdown from "react-markdown";
+
 export default function NextStepCard({ nextStep }) {
   if (!nextStep) return null;
 
@@ -49,16 +51,31 @@ export default function NextStepCard({ nextStep }) {
           }}>
             Coaching Compass
           </h2>
-          <p style={{
-            margin: 0,
-            fontFamily: "Poppins, sans-serif",
-            fontSize: 15,
-            fontWeight: 500,
-            lineHeight: 1.7,
-            color: "#585f66",
-          }}>
+          <ReactMarkdown
+            components={{
+              p: ({ children }) => (
+                <p
+                  style={{
+                    margin: 0,
+                    fontFamily: "Poppins, sans-serif",
+                    fontSize: 15,
+                    fontWeight: 500,
+                    lineHeight: 1.7,
+                    color: "#585f66",
+                  }}
+                >
+                  {children}
+                </p>
+              ),
+              strong: ({ children }) => (
+                <strong style={{ color: "#343a40", fontWeight: 700 }}>
+                  {children}
+                </strong>
+              ),
+            }}
+          >
             {nextStep.suggestion || nextStep.name || "Continue the coaching journey with Ally."}
-          </p>
+          </ReactMarkdown>
           <button
             type="button"
             style={{
