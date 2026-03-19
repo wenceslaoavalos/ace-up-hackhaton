@@ -9,6 +9,7 @@ class Event(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String, nullable=False, index=True)
     name = Column(String, nullable=False)
+    takeaway = Column(String, nullable=False)
     analysis = Column(Text, nullable=False)
     signals = Column(JSON, nullable=False)
     date = Column(Date, nullable=False)

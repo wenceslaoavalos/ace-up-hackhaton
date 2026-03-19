@@ -64,6 +64,7 @@ OUTPUT FORMAT
 
 {{
   "name": "A short descriptive name for this event based on its content (e.g., 'Time management coaching', 'Team priorities discussion', 'Stakeholder communication planning')",
+  "takeaway": "A short, strong second-person learning for the user that captures what they realized or learned in this interaction (e.g., 'You learned that protecting focus time matters more than staying constantly available.', 'You learned that leading with the decision makes your message more credible.')",
   "analysis": "Short synthesis written in second person (addressing 'you') explaining what the user demonstrated in this session and what evidence supports the detected competencies. Example: 'In this session, you focused on improving time management by...'",
   "signals": {{
     "Improving Time Management, Organization, and Productivity": 0,
@@ -89,7 +90,8 @@ CORE TASK
 3. Each time a micro-behavior is clearly evidenced, assign one point to its parent competency.
 4. After scoring all competencies, normalize the totals into percentages so that all competency values sum to 100%.
 5. Write a short analysis summarizing the strongest and weakest signals using only evidence grounded in the text.
-6. Use today's processing date if a date is available in context. Otherwise use the provided processing date.
+6. Write a short takeaway that distills the most important message for the user from this interaction.
+7. Use today's processing date if a date is available in context. Otherwise use the provided processing date.
 
 IMPORTANT SCORING RULES
 
@@ -134,6 +136,21 @@ The "analysis" field must:
 - Reference specific evidence from the text showing what the user said or did.
 - Avoid vague or generic statements.
 - If no evidence exists, state that clearly while still addressing the user directly in a natural way.
+
+TAKEAWAY REQUIREMENTS
+
+The "takeaway" field must:
+- Be written as a learning the user gained from this specific interaction.
+- Always be phrased in second person, directly addressing the user.
+- Be short: 1 sentence, ideally 6-12 words.
+- State the clearest lesson, realization, or shift that emerged for the user in the interaction.
+- Be specific to the event text, not generic coaching advice.
+- Avoid imperative phrasing like direct commands unless the event itself clearly frames the learning that way.
+- Avoid sounding templated or hardcoded; vary the wording naturally while keeping the same intention.
+- It is good to use patterns like "You learned that...", "You realized that...", or "You saw that..." when they fit naturally.
+- If helpful, briefly anchor the learning in the user's actions or commitments from the event.
+- Avoid explanation, hedging, filler, or multiple ideas joined together.
+- Sound memorable and personally meaningful to the user.
 
 COMPETENCY MODEL
 

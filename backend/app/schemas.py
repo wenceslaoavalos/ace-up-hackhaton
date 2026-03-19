@@ -30,6 +30,7 @@ class EventIngestRequest(BaseModel):
 
 class LLMEventResponse(BaseModel):
     name: str
+    takeaway: str
     analysis: str
     signals: CompetencySignals
     date: date
@@ -38,6 +39,7 @@ class LLMEventResponse(BaseModel):
 class EventResponse(BaseModel):
     id: int
     name: str
+    takeaway: str
     analysis: str
     signals: dict[str, float]
     date: date
