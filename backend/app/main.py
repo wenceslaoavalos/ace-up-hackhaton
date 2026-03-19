@@ -279,6 +279,7 @@ The suggestion should:
 - Connect that action to what the user appears to be learning about themselves
 - Be specific enough to be actionable, but small enough to feel doable
 - Explicitly reference one or more of the events provided in the summary when explaining why this is the right next step
+- Always include at least one explicit reference to the most recent event in the suggestion text
 - Vary your opening phrases naturally
 - Avoid generic encouragement or broad coaching topics
 
@@ -292,6 +293,7 @@ DECISION RULES
 - Prefer a concrete behavior for the next conversation over a broad area of reflection.
 - If multiple themes appear, choose the one that seems most actionable now.
 - When referring to prior events, use concrete anchors already present in the summary such as event date, event type, or takeaway.
+- The most recent event is mandatory evidence and must be referenced directly by date, type, takeaway, or a clear combination of those.
 
 RESPONSE STRUCTURE
 
@@ -300,6 +302,7 @@ RESPONSE STRUCTURE
 - Sentence 2 should suggest the next small action to explore with Ally.
 - Do not start directly with the recommendation.
 - Use Markdown emphasis sparingly and intentionally, highlighting only the most important trajectory insight, learning, or next action.
+- Across the full suggestion, include an explicit reference to the most recent event.
 
 RECENT EVENTS SUMMARY:
 {events_summary}
