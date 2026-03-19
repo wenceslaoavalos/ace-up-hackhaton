@@ -89,7 +89,7 @@ export default function NextStepCard({ nextStep }) {
             <img
               src="/img/ally_icon.svg"
               alt="AceUp Ally"
-              style={{ width: 16, height: 16, display: "block" }}
+              style={{ width: 20, height: 20, display: "block" }}
             />
             Chat with Ally
           </button>
