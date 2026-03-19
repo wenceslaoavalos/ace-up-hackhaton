@@ -70,21 +70,17 @@ export default function CompetencyAnalysis({ events }) {
         <h2 style={{
           fontFamily: '"Source Serif Pro", serif',
           fontSize: 26, fontWeight: 700,
-          color: "#343a40", margin: "0 0 12px",
+          color: "#343a40", margin: "0 0 10px",
         }}>
-          Overall Competency Focus
+          Focus Areas
         </h2>
         <p style={{
           fontFamily: "Poppins, sans-serif",
           fontSize: 14, color: "#585f66",
-          lineHeight: 1.75, margin: 0,
-          maxWidth: 760,
+          lineHeight: 1.65, margin: 0,
+          maxWidth: 640,
         }}>
-          This analysis shows the cumulative distribution of coaching focus areas across all sessions in the program.
-          Each competency reflects the combined percentage of time and attention dedicated to it throughout the journey,
-          helping identify the strongest themes of development and growth areas for{" "}
-          <strong style={{ color: "#343a40" }}>Lewis</strong>.
-          The values are derived from the competency signals captured during each coaching interaction.
+          Cumulative distribution of coaching focus across all sessions — where time and attention have been invested throughout the journey.
         </p>
       </div>
 
@@ -136,7 +132,7 @@ export default function CompetencyAnalysis({ events }) {
             color: "#004266", textTransform: "uppercase", letterSpacing: "0.08em",
             margin: "0 0 20px",
           }}>
-            Competency Distribution
+            Focus Areas Breakdown
           </h4>
           <ResponsiveContainer width="100%" height={data.length * 36}>
             <BarChart

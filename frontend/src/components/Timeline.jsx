@@ -36,7 +36,7 @@ const COMPETENCY_SHORT = {
 const DOT_R      = 14;   // dot radius (px)
 const LINE_Y     = 210;  // line Y from top of track container
 const V_OFFSET   = 110;  // vertical distance from line to dot centre
-const TRACK_H    = 410;  // total track height
+const TRACK_H    = 350;  // total track height
 const MARGIN     = 100;  // px inset before first / after last dot
 const MIN_SLOT_W = 185;  // minimum px between adjacent slots
 const NUDGE_PX   = 20;   // horizontal nudge for same-date stacked events
@@ -214,16 +214,19 @@ function EventModal({ item, onClose, onRegenerateNextStep }) {
           <>
             <div style={{ marginBottom: 28 }}>
               <h4 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 13, color: "#004266", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Session Analysis
+                Event Analysis
               </h4>
               <p style={{ fontFamily: "Poppins, sans-serif", fontSize: 14, color: "#585f66", lineHeight: 1.75, margin: 0 }}>
                 {item.analysis}
               </p>
             </div>
             <div>
-              <h4 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 13, color: "#004266", marginBottom: 16, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Competency Signals
+              <h4 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 13, color: "#004266", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                Focus Areas
               </h4>
+              <p style={{ fontFamily: "Poppins, sans-serif", fontSize: 12, color: "#7a8086", lineHeight: 1.6, margin: "0 0 16px" }}>
+                Competency signals detected in this session, showing the relative weight of each focus area.
+              </p>
               <ResponsiveContainer width="100%" height={Math.max(chartData.length * 44, 140)}>
                 <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 48, left: 148, bottom: 0 }}>
                   <XAxis type="number" domain={[0, 35]} tickFormatter={(v) => `${v}%`}
