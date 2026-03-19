@@ -269,9 +269,11 @@ Based on the user's coaching journey from the last 3 months, identify the most i
 The suggestion should:
 - Be written in second person, directly addressing the user (e.g., "You can talk to Ally about...")
 - Feel natural and conversational
+- Use Markdown to highlight the most important parts of the message
 - Be grounded in the patterns, themes, and learnings visible across the last 3 months of events
 - Open by describing the user's trajectory and emerging learnings across the events before suggesting any next step
 - Make that trajectory-and-learning opening mandatory, not optional
+- Open with a bold, high-impact statement about the user's trajectory so far
 - Focus on one clear theme or challenge that would help them grow
 - Recommend one small next action, experiment, or behavior shift the user can take next
 - Connect that action to what the user appears to be learning about themselves
@@ -294,8 +296,10 @@ DECISION RULES
 RESPONSE STRUCTURE
 
 - Sentence 1 must describe the user's trajectory and the main learning(s) emerging across the recent events.
+- Sentence 1 must begin with Markdown bold and present the trajectory insight as the most impactful observation so far.
 - Sentence 2 should suggest the next small action to explore with Ally.
 - Do not start directly with the recommendation.
+- Use Markdown emphasis sparingly and intentionally, highlighting only the most important trajectory insight, learning, or next action.
 
 RECENT EVENTS SUMMARY:
 {events_summary}
