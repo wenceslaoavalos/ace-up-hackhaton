@@ -63,7 +63,8 @@ const groupByDate = (events) => {
 
 // ─── Event Detail Modal ───────────────────────────────────────────────────────
 
-function EventModal({ item, onClose }) {
+function EventModal({ item, onClose, onRegenerateNextStep }) {
+  const [isRegenerating, setIsRegenerating] = useState(false);
   if (!item) return null;
   const isNextStep = item._isNextStep;
   const cfg = TYPE_CONFIG[isNextStep ? "nextStep" : item.type] || TYPE_CONFIG["One on One Coaching"];
@@ -77,6 +78,17 @@ function EventModal({ item, onClose }) {
       value,
       fill: getCompetencyColor(name),
     }));
+
+  const handleRegenerate = async () => {
+    if (!onRegenerateNextStep || isRegenerating) return;
+
+    setIsRegenerating(true);
+    try {
+      await onRegenerateNextStep();
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
 
   return (
     <div
@@ -99,16 +111,39 @@ function EventModal({ item, onClose }) {
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22 }}>
           <div>
-            <span style={{
-              background: cfg.color,
-              color: isNextStep ? "#343a40" : "#fff",
-              borderRadius: 20, padding: "4px 14px",
-              fontSize: 11, fontWeight: 600,
-              fontFamily: "Poppins, sans-serif",
-              textTransform: "uppercase", letterSpacing: "0.08em",
-            }}>
-              {cfg.label}
-            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{
+                background: cfg.color,
+                color: isNextStep ? "#343a40" : "#fff",
+                borderRadius: 20, padding: "4px 14px",
+                fontSize: 11, fontWeight: 600,
+                fontFamily: "Poppins, sans-serif",
+                textTransform: "uppercase", letterSpacing: "0.08em",
+              }}>
+                {cfg.label}
+              </span>
+              {isNextStep && (
+                <button
+                  type="button"
+                  onClick={handleRegenerate}
+                  disabled={isRegenerating}
+                  style={{
+                    background: "#fff7db",
+                    color: "#9b6b00",
+                    border: "1px solid #ffd76a",
+                    borderRadius: 999,
+                    padding: "5px 10px",
+                    fontFamily: "Poppins, sans-serif",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: isRegenerating ? "wait" : "pointer",
+                    opacity: isRegenerating ? 0.7 : 1,
+                  }}
+                >
+                  {isRegenerating ? "Regenerating..." : "Regenerate"}
+                </button>
+              )}
+            </div>
             <h2 style={{
               fontFamily: '"Source Serif Pro", serif',
               fontSize: 26, fontWeight: 600,
@@ -217,7 +252,7 @@ function EventModal({ item, onClose }) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export default function Timeline({ events, nextStep, startDate, endDate }) {
+export default function Timeline({ events, nextStep, startDate, endDate, onRegenerateNextStep }) {
   const [selected, setSelected]     = useState(null);
   const [activeType, setActiveType] = useState(null);
   const scrollRef                   = useRef(null);
@@ -235,6 +270,12 @@ export default function Timeline({ events, nextStep, startDate, endDate }) {
     setOuterWidth(el.getBoundingClientRect().width);
     return () => obs.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (selected?._isNextStep) {
+      setSelected(nextStep ? { ...nextStep, _isNextStep: true } : null);
+    }
+  }, [nextStep, selected?._isNextStep]);
 
   // ── Filter ───────────────────────────────────────────────────────────────
 
@@ -577,6 +618,7 @@ export default function Timeline({ events, nextStep, startDate, endDate }) {
       <EventModal
         item={selected}
         onClose={() => setSelected(null)}
+        onRegenerateNextStep={onRegenerateNextStep}
       />
     </div>
   );

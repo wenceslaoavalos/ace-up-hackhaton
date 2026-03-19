@@ -79,6 +79,19 @@ function isJourneyDataEmpty(data) {
   return !Array.isArray(data?.events) || data.events.length === 0;
 }
 
+async function fetchNextAction() {
+  const response = await fetch(NEXT_ACTION_ENDPOINT);
+
+  if (!response.ok) {
+    throw new Error(`Request failed with status ${response.status}`);
+  }
+
+  const payload = await response.json();
+  console.log("Next action API response:", payload);
+
+  return normalizeNextAction(payload);
+}
+
 export default function App() {
   const [dateRange, setDateRange] = useState({ startDate: null, endDate: null });
   const [journeyData, setJourneyData] = useState(null);
@@ -116,16 +129,7 @@ export default function App() {
       let nextStep = baseData.nextStep ?? null;
 
       try {
-        const response = await fetch(NEXT_ACTION_ENDPOINT);
-
-        if (!response.ok) {
-          throw new Error(`Request failed with status ${response.status}`);
-        }
-
-        const payload = await response.json();
-        console.log("Next action API response:", payload);
-
-        const normalizedNextAction = normalizeNextAction(payload);
+        const normalizedNextAction = await fetchNextAction();
 
         if (normalizedNextAction) {
           nextStep = normalizedNextAction;
@@ -152,6 +156,31 @@ export default function App() {
     };
   }, []);
 
+  const handleRegenerateNextStep = async () => {
+    try {
+      const regeneratedNextStep = await fetchNextAction();
+
+      if (!regeneratedNextStep) {
+        console.log("Next action API returned an empty suggestion during regeneration.");
+        return null;
+      }
+
+      setJourneyData((current) => {
+        if (!current) return current;
+
+        return {
+          ...current,
+          nextStep: regeneratedNextStep,
+        };
+      });
+
+      return regeneratedNextStep;
+    } catch (error) {
+      console.log("Next action regeneration failed. Keeping the current next step.", error);
+      return null;
+    }
+  };
+
   return (
     <div style={{ minHeight: "100vh", background: "#f9fbfd" }}>
       <Header />
@@ -171,7 +200,7 @@ export default function App() {
                   company="Ferrari"
                   program="One on One Coaching"
                   totalSessions={journeyData.events.length}
-                  startDate="Jan 2026"
+                  startDate="Jun 2025"
                 />
               </div>
 
@@ -196,6 +225,7 @@ export default function App() {
                 nextStep={journeyData.nextStep}
                 startDate={dateRange.startDate}
                 endDate={dateRange.endDate}
+                onRegenerateNextStep={handleRegenerateNextStep}
               />
             </div>
 
