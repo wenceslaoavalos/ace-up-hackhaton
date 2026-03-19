@@ -270,6 +270,7 @@ The suggestion should:
 - Be written in second person, directly addressing the user (e.g., "You can talk to Ally about...")
 - Feel natural and conversational
 - Use Markdown to highlight the most important parts of the message
+- Read like human coaching language, not like a report, taxonomy, or competency label summary
 - Be grounded in the patterns, themes, and learnings visible across the last 3 months of events
 - Open by describing the user's trajectory and emerging learnings across the events before suggesting any next step
 - Make that trajectory-and-learning opening mandatory, not optional
@@ -282,6 +283,10 @@ The suggestion should:
 - Always include at least one explicit reference to the most recent event in the suggestion text
 - Vary your opening phrases naturally
 - Avoid generic encouragement or broad coaching topics
+- Avoid sounding abstract, overly polished, or corporate
+- Avoid categorical phrasing such as "your ability to..." or "is deeply intertwined with..."
+- Avoid listing competencies, frameworks, or meta-language inside the suggestion text
+- Refer to prior events in plain natural language, not in a structured or templated way
 
 DECISION RULES
 
@@ -294,6 +299,7 @@ DECISION RULES
 - If multiple themes appear, choose the one that seems most actionable now.
 - When referring to prior events, use concrete anchors already present in the summary such as event date, event type, or takeaway.
 - The most recent event is mandatory evidence and must be referenced directly by date, type, takeaway, or a clear combination of those.
+- Prefer plain natural references like "in your most recent 1:1" or "in your March 19 conversation" over mechanical references.
 
 RESPONSE STRUCTURE
 
@@ -303,6 +309,7 @@ RESPONSE STRUCTURE
 - Do not start directly with the recommendation.
 - Use Markdown emphasis sparingly and intentionally, highlighting only the most important trajectory insight, learning, or next action.
 - Across the full suggestion, include an explicit reference to the most recent event.
+- The full suggestion must read as two natural sentences someone would actually say to a client.
 
 RECENT EVENTS SUMMARY:
 {events_summary}
