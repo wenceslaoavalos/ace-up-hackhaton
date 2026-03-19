@@ -18,7 +18,7 @@ export default function NextStepCard({ nextStep }) {
       <p style={{
         fontFamily: "Poppins, sans-serif",
         fontSize: 12,
-        fontWeight: 600,
+        fontWeight: 900,
         color: "#ffb800",
         textTransform: "uppercase",
         letterSpacing: "0.12em",
@@ -47,7 +47,7 @@ export default function NextStepCard({ nextStep }) {
             margin: "0 0 10px",
             lineHeight: 1.25,
           }}>
-            Next Step
+            Coaching Compass
           </h2>
           <p style={{
             margin: 0,
@@ -63,19 +63,35 @@ export default function NextStepCard({ nextStep }) {
             type="button"
             style={{
               marginTop: 18,
-              background: "#008af8",
-              color: "#fff",
-              border: "none",
+              background: "#fff",
+              color: "#008af8",
+              border: "1px solid #cfe7fb",
               borderRadius: 999,
               padding: "10px 18px",
               fontFamily: "Poppins, sans-serif",
               fontSize: 13,
               fontWeight: 600,
               cursor: "pointer",
-              boxShadow: "0 8px 18px rgba(0,138,248,0.22)",
+              boxShadow: "0 8px 18px rgba(0,66,102,0.12)",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "#eaf5ff";
+              e.currentTarget.style.borderColor = "#9fd0fb";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "#fff";
+              e.currentTarget.style.borderColor = "#cfe7fb";
             }}
           >
-            New chat with Ally
+            <img
+              src="/img/ally_icon.svg"
+              alt="AceUp Ally"
+              style={{ width: 20, height: 20, display: "block" }}
+            />
+            Chat with Ally
           </button>
         </div>
       </div>

@@ -4,6 +4,7 @@ import {
   ResponsiveContainer, Cell,
 } from "recharts";
 import { getCompetencyColor } from "../utils/competencyColors";
+import DateFilter from "./DateFilter";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -13,7 +14,7 @@ const TYPE_CONFIG = {
   "Ally Conversation":    { color: "#2ab34b", label: "Ally Conversation" },
   "Team Coaching":        { color: "#9b59b6", label: "Team Coaching" },
   "360 Debrief":          { color: "#f57800", label: "360 Debrief" },
-  nextStep:               { color: "#ffb800", label: "Next Step" },
+  nextStep:               { color: "#ffb800", label: "Coaching Compass" },
 };
 
 const COMPETENCY_SHORT = {
@@ -36,7 +37,7 @@ const COMPETENCY_SHORT = {
 const DOT_R      = 14;   // dot radius (px)
 const LINE_Y     = 210;  // line Y from top of track container
 const V_OFFSET   = 110;  // vertical distance from line to dot centre
-const TRACK_H    = 350;  // total track height
+const TRACK_H    = 420;  // total track height
 const MARGIN     = 100;  // px inset before first / after last dot
 const MIN_SLOT_W = 185;  // minimum px between adjacent slots
 const NUDGE_PX   = 20;   // horizontal nudge for same-date stacked events
@@ -149,7 +150,7 @@ function EventModal({ item, onClose, onRegenerateNextStep }) {
               fontSize: 26, fontWeight: 600,
               color: "#f57800", margin: "10px 0 4px",
             }}>
-              {item.name}
+              {isNextStep ? "Coaching Compass" : item.name}
             </h2>
             {!isNextStep && (
               <span style={{ fontFamily: "Poppins, sans-serif", fontSize: 13, color: "#7a8086" }}>
@@ -191,19 +192,35 @@ function EventModal({ item, onClose, onRegenerateNextStep }) {
                 type="button"
                 style={{
                   marginTop: 18,
-                  background: "#008af8",
-                  color: "#fff",
-                  border: "none",
+                  background: "#fff",
+                  color: "#008af8",
+                  border: "1px solid #cfe7fb",
                   borderRadius: 999,
                   padding: "10px 18px",
                   fontFamily: "Poppins, sans-serif",
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: "pointer",
-                  boxShadow: "0 8px 18px rgba(0,138,248,0.22)",
+                  boxShadow: "0 8px 18px rgba(0,66,102,0.12)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "#eaf5ff";
+                  e.currentTarget.style.borderColor = "#9fd0fb";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "#fff";
+                  e.currentTarget.style.borderColor = "#cfe7fb";
                 }}
               >
-                New chat with Ally
+                <img
+                  src="/img/ally_icon.svg"
+                  alt="AceUp Ally"
+                  style={{ width: 16, height: 16, display: "block" }}
+                />
+                Chat with Ally
               </button>
             </div>
           </div>
@@ -212,6 +229,16 @@ function EventModal({ item, onClose, onRegenerateNextStep }) {
         {/* Analysis + Chart */}
         {!isNextStep && (
           <>
+            {item.takeaway && (
+              <div style={{ marginBottom: 24 }}>
+                <h4 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 13, color: "#004266", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  Key Takeaway
+                </h4>
+                <p style={{ fontFamily: "Poppins, sans-serif", fontSize: 14, color: "#585f66", lineHeight: 1.75, margin: 0 }}>
+                  {item.takeaway}
+                </p>
+              </div>
+            )}
             <div style={{ marginBottom: 28 }}>
               <h4 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 13, color: "#004266", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                 Event Analysis
@@ -255,7 +282,7 @@ function EventModal({ item, onClose, onRegenerateNextStep }) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export default function Timeline({ events, nextStep, startDate, endDate, onRegenerateNextStep }) {
+export default function Timeline({ events, nextStep, startDate, endDate, onDateChange, onRegenerateNextStep }) {
   const [selected, setSelected]     = useState(null);
   const [activeType, setActiveType] = useState(null);
   const scrollRef                   = useRef(null);
@@ -335,19 +362,28 @@ export default function Timeline({ events, nextStep, startDate, endDate, onRegen
 
   return (
     <div style={{ fontFamily: "Poppins, sans-serif" }}>
+      <div>
+        <DateFilter
+          startDate={startDate}
+          endDate={endDate}
+          onChange={onDateChange}
+          embedded
+        />
+      </div>
 
       {/* ── Legend ── */}
       <div style={{
         padding: "18px 32px",
         background: "#fff",
-        borderBottom: "1px solid #e8ecf0",
         display: "flex", gap: 8, flexWrap: "wrap",
         alignItems: "center",
       }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: "#7a8086", marginRight: 6 }}>
           FILTER BY TYPE:
         </span>
-        {Object.entries(TYPE_CONFIG).map(([key, { color, label }]) => {
+        {Object.entries(TYPE_CONFIG)
+          .filter(([key]) => key !== "nextStep")
+          .map(([key, { color, label }]) => {
           const isActive = activeType === key;
           const isDimmed = activeType && activeType !== key;
           return (
@@ -365,11 +401,10 @@ export default function Timeline({ events, nextStep, startDate, endDate, onRegen
               }}
             >
               <div style={{
-                width: key === "nextStep" ? 10 : 11,
-                height: key === "nextStep" ? 10 : 11,
-                borderRadius: key === "nextStep" ? 2 : "50%",
+                width: 11,
+                height: 11,
+                borderRadius: "50%",
                 background: color,
-                transform: key === "nextStep" ? "rotate(45deg)" : "none",
                 flexShrink: 0,
               }} />
               <span style={{
@@ -463,12 +498,16 @@ export default function Timeline({ events, nextStep, startDate, endDate, onRegen
                   const isAbove = idx % 2 === 0;
                   const nudge   = group.events.length > 1 ? (idx === 0 ? -NUDGE_PX : NUDGE_PX) : 0;
                   const xPx     = baseX + nudge;
+                  const hasTakeaway = Boolean(event.takeaway);
 
                   const dotCY      = LINE_Y + (isAbove ? -V_OFFSET : V_OFFSET);
                   const connTop    = isAbove ? dotCY + DOT_R : LINE_Y;
                   const connH      = isAbove ? LINE_Y - dotCY - DOT_R : dotCY - DOT_R - LINE_Y;
-                  const nameCssTop = isAbove ? dotCY - DOT_R - 52 : dotCY + DOT_R + 28;
+                  const nameCssTop = isAbove
+                    ? dotCY - DOT_R - 52
+                    : dotCY + DOT_R + 28;
                   const dateCssTop = isAbove ? dotCY + DOT_R + 8  : dotCY - DOT_R - 26;
+                  const takeawayCssTop = LINE_Y + 30;
 
                   return (
                     <div key={event.id}>
@@ -526,16 +565,40 @@ export default function Timeline({ events, nextStep, startDate, endDate, onRegen
                           position: "absolute",
                           left: xPx, top: nameCssTop,
                           transform: "translateX(-50%)",
-                          width: 140,
+                          width: 160,
                           textAlign: "center",
-                          fontSize: 12, fontWeight: 700,
                           color: "#343a40",
                           cursor: "pointer",
                           lineHeight: 1.35,
                         }}
                       >
-                        {event.name}
+                        <span style={{ fontSize: 12, fontWeight: 700 }}>
+                          {event.name}
+                        </span>
                       </div>
+
+                      {hasTakeaway && (
+                        <div
+                          onClick={() => setSelected(event)}
+                          style={{
+                            position: "absolute",
+                            left: xPx,
+                            top: takeawayCssTop,
+                            transform: "translateX(-50%)",
+                            width: 140,
+                            textAlign: "center",
+                            fontSize: 11,
+                            fontWeight: 500,
+                            color: "#7a8086",
+                            lineHeight: 1.35,
+                            cursor: "pointer",
+                            whiteSpace: "normal",
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          {event.takeaway}
+                        </div>
+                      )}
                     </div>
                   );
                 });

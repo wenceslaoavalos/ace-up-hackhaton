@@ -80,7 +80,7 @@ export default function CompetencyAnalysis({ events }) {
           lineHeight: 1.65, margin: 0,
           maxWidth: 640,
         }}>
-          Cumulative distribution of coaching focus across all sessions — where time and attention have been invested throughout the journey.
+          Cumulative distribution of coaching focus <strong style={{ color: "#343a40" }}>across all sessions</strong> — where time and attention have been invested throughout the journey.
         </p>
       </div>
 

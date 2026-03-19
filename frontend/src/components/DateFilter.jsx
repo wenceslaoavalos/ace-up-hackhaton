@@ -16,7 +16,7 @@ const fmtDate = (d) =>
     ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : null;
 
-export default function DateFilter({ startDate, endDate, onChange }) {
+export default function DateFilter({ startDate, endDate, onChange, embedded = false }) {
   const [activeKey, setActiveKey]   = useState("all");
   const [showPicker, setShowPicker] = useState(false);
   const pickerRef                   = useRef(null);
@@ -64,10 +64,10 @@ export default function DateFilter({ startDate, endDate, onChange }) {
 
   return (
     <div style={{
-      background: "#fff",
-      borderRadius: 14,
-      boxShadow: "0 3px 16px rgba(0,66,102,0.09)",
-      padding: "14px 20px",
+      background: embedded ? "transparent" : "#fff",
+      borderRadius: embedded ? 0 : 14,
+      boxShadow: embedded ? "none" : "0 3px 16px rgba(0,66,102,0.09)",
+      padding: embedded ? "18px 32px 16px" : "14px 20px",
       display: "flex",
       alignItems: "center",
       gap: 10,
