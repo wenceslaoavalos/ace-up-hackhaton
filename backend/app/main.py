@@ -264,15 +264,29 @@ PROCESSING_DATE
 
 NEXT_ACTION_PROMPT = """You are a coaching assistant helping suggest the next conversation topic with Ally, an AI coaching companion.
 
-Based on the user's recent coaching journey, suggest a specific, actionable topic they could discuss with Ally. 
+Based on the user's coaching journey from the last 3 months, identify the most important learnings that are emerging for them and suggest the next small action they should explore with Ally to turn those learnings into practice.
 
 The suggestion should:
 - Be written in second person, directly addressing the user (e.g., "You can talk to Ally about...")
 - Feel natural and conversational
-- Connect to patterns or themes in their recent work
+- Be grounded in the patterns, themes, and learnings visible across the last 3 months of events
 - Focus on one clear theme or challenge that would help them grow
-- Be specific enough to be actionable
+- Recommend one small next action, experiment, or behavior shift the user can take next
+- Connect that action to what the user appears to be learning about themselves
+- Be specific enough to be actionable, but small enough to feel doable
+- Explicitly reference one or more of the events provided in the summary when explaining why this is the right next step
 - Vary your opening phrases naturally
+- Avoid generic encouragement or broad coaching topics
+
+DECISION RULES
+
+- Read the full 3-month history as a progression, not as isolated events.
+- Pay close attention to repeated takeaways, recurring competencies, and patterns in the analyses.
+- Infer the user's current learning edge: what they are beginning to understand, practice, or struggle to sustain.
+- Choose the next small action that most directly helps the user deepen or apply that learning.
+- Prefer a concrete behavior for the next conversation over a broad area of reflection.
+- If multiple themes appear, choose the one that seems most actionable now.
+- When referring to prior events, use concrete anchors already present in the summary such as event date, event type, or takeaway.
 
 RECENT EVENTS SUMMARY:
 {events_summary}
@@ -340,14 +354,23 @@ async def get_next_action(
 ):
     """
     Generate a personalized suggestion for the next Ally conversation
-    based on the user's last 3 events.
+    based on the user's last 3 months of events.
     """
-    # Fetch last 3 events for the user, ordered by date descending
+    three_months_ago = date.today().replace(day=1)
+    if three_months_ago.month <= 3:
+        three_months_ago = three_months_ago.replace(
+            year=three_months_ago.year - 1,
+            month=three_months_ago.month + 9,
+        )
+    else:
+        three_months_ago = three_months_ago.replace(month=three_months_ago.month - 3)
+
+    # Fetch events from the last 3 months for the user, ordered by date descending
     recent_events = (
         db.query(models.Event)
         .filter(models.Event.user_id == user_id)
+        .filter(models.Event.date >= three_months_ago)
         .order_by(models.Event.date.desc())
-        .limit(3)
         .all()
     )
     
@@ -375,6 +398,7 @@ async def get_next_action(
         events_summary_parts.append(
             f"Event {idx} ({event.date}):\n"
             f"  Type: {event.name}\n"
+            f"  Takeaway: {event.takeaway}\n"
             f"  Analysis: {event.analysis[:200]}...\n"
             f"  Top competencies: {competencies_str if competencies_str else 'None detected'}"
         )
