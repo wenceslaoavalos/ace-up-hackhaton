@@ -270,6 +270,8 @@ The suggestion should:
 - Be written in second person, directly addressing the user (e.g., "You can talk to Ally about...")
 - Feel natural and conversational
 - Be grounded in the patterns, themes, and learnings visible across the last 3 months of events
+- Open by describing the user's trajectory and emerging learnings across the events before suggesting any next step
+- Make that trajectory-and-learning opening mandatory, not optional
 - Focus on one clear theme or challenge that would help them grow
 - Recommend one small next action, experiment, or behavior shift the user can take next
 - Connect that action to what the user appears to be learning about themselves
@@ -283,10 +285,17 @@ DECISION RULES
 - Read the full 3-month history as a progression, not as isolated events.
 - Pay close attention to repeated takeaways, recurring competencies, and patterns in the analyses.
 - Infer the user's current learning edge: what they are beginning to understand, practice, or struggle to sustain.
+- First summarize the trajectory: how the user's recent events show movement, repetition, or progression in their learning.
 - Choose the next small action that most directly helps the user deepen or apply that learning.
 - Prefer a concrete behavior for the next conversation over a broad area of reflection.
 - If multiple themes appear, choose the one that seems most actionable now.
 - When referring to prior events, use concrete anchors already present in the summary such as event date, event type, or takeaway.
+
+RESPONSE STRUCTURE
+
+- Sentence 1 must describe the user's trajectory and the main learning(s) emerging across the recent events.
+- Sentence 2 should suggest the next small action to explore with Ally.
+- Do not start directly with the recommendation.
 
 RECENT EVENTS SUMMARY:
 {events_summary}
