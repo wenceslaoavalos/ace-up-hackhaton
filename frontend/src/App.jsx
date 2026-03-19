@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Header from "./components/Header";
 import Timeline from "./components/Timeline";
 import CoachingTitle from "./components/CoachingTitle";
+import NextStepCard from "./components/NextStepCard";
 import DateFilter from "./components/DateFilter";
 import CompetencyAnalysis from "./components/CompetencyAnalysis";
 import LoadingState from "./components/LoadingState";
@@ -191,9 +192,8 @@ export default function App() {
         ) : (
           <>
 
-            {/* ── Top row: Title card + Calendar ── */}
+            {/* ── Top row: Coaching Journey + Next Step ── */}
             <div style={{ display: "flex", gap: 24, alignItems: "stretch" }}>
-              {/* Title card — takes all remaining space */}
               <div style={{ flex: 1 }}>
                 <CoachingTitle
                   name="Maya Fernandez"
@@ -203,15 +203,17 @@ export default function App() {
                   startDate="Jun 2025"
                 />
               </div>
-
               <div style={{ flex: 1 }}>
-                <DateFilter
-                  startDate={dateRange.startDate}
-                  endDate={dateRange.endDate}
-                  onChange={setDateRange}
-                />
+                <NextStepCard nextStep={journeyData.nextStep} />
               </div>
             </div>
+
+            {/* ── Date filter (compact, below top row) ── */}
+            <DateFilter
+              startDate={dateRange.startDate}
+              endDate={dateRange.endDate}
+              onChange={setDateRange}
+            />
 
             {/* ── Timeline ── */}
             <div style={{
