@@ -3,7 +3,6 @@ import Header from "./components/Header";
 import Timeline from "./components/Timeline";
 import CoachingTitle from "./components/CoachingTitle";
 import NextStepCard from "./components/NextStepCard";
-import DateFilter from "./components/DateFilter";
 import CompetencyAnalysis from "./components/CompetencyAnalysis";
 import LoadingState from "./components/LoadingState";
 import { mockData } from "./data/mockData";
@@ -194,7 +193,7 @@ export default function App() {
 
             {/* ── Top row: Coaching Journey + Next Step ── */}
             <div style={{ display: "flex", gap: 24, alignItems: "stretch" }}>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: "0 0 30%", maxWidth: "30%", minWidth: 0 }}>
                 <CoachingTitle
                   name="Maya Fernandez"
                   company="Ferrari"
@@ -203,17 +202,10 @@ export default function App() {
                   startDate="Jun 2025"
                 />
               </div>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: "0 0 70%", maxWidth: "70%", minWidth: 0 }}>
                 <NextStepCard nextStep={journeyData.nextStep} />
               </div>
             </div>
-
-            {/* ── Date filter (compact, below top row) ── */}
-            <DateFilter
-              startDate={dateRange.startDate}
-              endDate={dateRange.endDate}
-              onChange={setDateRange}
-            />
 
             {/* ── Timeline ── */}
             <div style={{
@@ -227,6 +219,7 @@ export default function App() {
                 nextStep={journeyData.nextStep}
                 startDate={dateRange.startDate}
                 endDate={dateRange.endDate}
+                onDateChange={setDateRange}
                 onRegenerateNextStep={handleRegenerateNextStep}
               />
             </div>
