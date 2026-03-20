@@ -37,6 +37,33 @@ html, body, #root {
   animation: app-spin 0.8s linear infinite;
 }
 
+@keyframes ls-spin-cw {
+  to { transform: rotate(360deg); }
+}
+@keyframes ls-spin-ccw {
+  to { transform: rotate(-360deg); }
+}
+@keyframes ls-dot-bounce {
+  0%, 80%, 100% { transform: scale(0.55); opacity: 0.35; }
+  40%            { transform: scale(1);    opacity: 1; }
+}
+@keyframes ls-fade-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ns-icon-pulse {
+  0%, 100% { box-shadow: 0 4px 14px rgba(255,184,0,0.44); }
+  50%       { box-shadow: 0 4px 24px rgba(255,184,0,0.80); }
+}
+.ns-icon { animation: ns-icon-pulse 2.4s ease-in-out infinite; }
+
+@keyframes tl-diamond-pulse {
+  0%, 100% { box-shadow: 0 4px 20px rgba(255,184,0,0.60); transform: translate(-50%,-50%) rotate(45deg) scale(1); }
+  50%       { box-shadow: 0 6px 32px rgba(255,184,0,0.90); transform: translate(-50%,-50%) rotate(45deg) scale(1.12); }
+}
+.tl-diamond { animation: tl-diamond-pulse 2s ease-in-out infinite; }
+
 ::-webkit-scrollbar { height: 6px; width: 6px; }
 ::-webkit-scrollbar-track { background: #f0f4fa; }
 ::-webkit-scrollbar-thumb { background: #008af8; border-radius: 3px; }
