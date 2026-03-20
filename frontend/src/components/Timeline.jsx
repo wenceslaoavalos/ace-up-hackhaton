@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, Cell,
@@ -33,16 +33,6 @@ const COMPETENCY_SHORT = {
   "Building and Leading Inclusive Teams":                     "Inclusive Teams",
 };
 
-// ─── Dimensions ───────────────────────────────────────────────────────────────
-
-const DOT_R      = 14;   // dot radius (px)
-const LINE_Y     = 210;  // line Y from top of track container
-const V_OFFSET   = 110;  // vertical distance from line to dot centre
-const TRACK_H    = 420;  // total track height
-const MARGIN     = 100;  // px inset before first / after last dot
-const MIN_SLOT_W = 185;  // minimum px between adjacent slots
-const NUDGE_PX   = 20;   // horizontal nudge for same-date stacked events
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const fmt = (d) =>
@@ -52,16 +42,357 @@ const fmt = (d) =>
 
 const fmtShort = (d) =>
   new Date(d + "T00:00:00").toLocaleDateString("en-US", {
-    month: "short", day: "numeric",
+    month: "short", year: "numeric",
   });
 
-const groupByDate = (events) => {
+const groupByMonth = (events) => {
   const map = {};
-  events.forEach((e) => { (map[e.date] = map[e.date] || []).push(e); });
-  return Object.entries(map)
-    .sort(([a], [b]) => new Date(a) - new Date(b))
-    .map(([date, events]) => ({ date, events }));
+  [...events]
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .forEach((e) => {
+      const d = new Date(e.date + "T00:00:00");
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+      if (!map[key]) map[key] = { key, label, events: [] };
+      map[key].events.push(e);
+    });
+  return Object.values(map).sort((a, b) => a.key.localeCompare(b.key));
 };
+
+const getTopCompetencies = (signals, n = 2) =>
+  Object.entries(signals || {})
+    .filter(([, v]) => v > 0)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, n)
+    .map(([name]) => name);
+
+const stripMarkdown = (text = "") =>
+  text.replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1").replace(/#+\s/g, "");
+
+// ─── Visual Graph Timeline ────────────────────────────────────────────────────
+
+const TOOLTIP_W = 268;
+
+function VisualTimeline({ events, nextStep, onEventClick }) {
+  const containerRef   = useRef(null);
+  const tooltipTimeout = useRef(null);
+  const autoTimers     = useRef([]);
+  const autoIndexRef   = useRef(0);
+  const sortedRef      = useRef([]);
+
+  const [width, setWidth]                   = useState(0);
+  const [tooltipData, setTooltipData]       = useState(null);
+  const [tooltipVisible, setTooltipVisible] = useState(false);
+  // Auto-play: up to 2 event objects shown simultaneously
+  const [autoPair, setAutoPair]   = useState([]);
+  const [autoVisible, setAutoVisible] = useState(false);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    obs.observe(el);
+    setWidth(el.getBoundingClientRect().width);
+    return () => obs.disconnect();
+  }, []);
+
+  // ── Hover tooltip helpers ────────────────────────────────────────────────
+  const showTooltip = (data) => {
+    clearTimeout(tooltipTimeout.current);
+    setTooltipData(data);
+    requestAnimationFrame(() => requestAnimationFrame(() => setTooltipVisible(true)));
+  };
+  const hideTooltip = () => {
+    setTooltipVisible(false);
+    tooltipTimeout.current = setTimeout(() => setTooltipData(null), 220);
+  };
+
+  const isHovering = !!tooltipData;
+
+  // ── Auto-play: cycle through pairs of events ─────────────────────────────
+  useEffect(() => {
+    const clearAll = () => autoTimers.current.forEach(clearTimeout);
+
+    if (isHovering) {
+      // Pause: fade out current auto pair, clear pending timers
+      setAutoVisible(false);
+      clearAll();
+      return clearAll;
+    }
+
+    if (!width) return clearAll;
+
+    const cycle = () => {
+      clearAll();
+      const s = sortedRef.current;
+      if (!s.length) return;
+
+      // Pick event A at current index, event B halfway through the list
+      // to guarantee visual separation on the timeline
+      const i = autoIndexRef.current % s.length;
+      autoIndexRef.current = (i + 1) % s.length;
+
+      setAutoPair([s[i]]);
+      setAutoVisible(false);
+
+      const t1 = setTimeout(() => setAutoVisible(true), 80);   // fade in
+      const t2 = setTimeout(() => setAutoVisible(false), 3400); // fade out
+      const t3 = setTimeout(cycle, 3900);                       // next pair
+      autoTimers.current = [t1, t2, t3];
+    };
+
+    const initial = setTimeout(cycle, 1200); // short initial delay
+    autoTimers.current = [initial];
+    return clearAll;
+  }, [isHovering, width, events]);
+
+  if (!events.length) return null;
+
+  const sorted = [...events].sort((a, b) => new Date(a.date) - new Date(b.date));
+  sortedRef.current = sorted; // keep in sync for the effect
+
+  const PADDING = 32;
+  const LINE_Y  = 42;
+  const DOT_R   = 7;
+
+  const allMs  = sorted.map((e) => new Date(e.date + "T00:00:00").getTime());
+  const minMs  = allMs[0];
+  const span   = (allMs[allMs.length - 1] - minMs) || 1;
+  const maxMs  = nextStep ? allMs[allMs.length - 1] + span * 0.14 : allMs[allMs.length - 1];
+
+  const toX = (isoDate) => {
+    const t = new Date(isoDate + "T00:00:00").getTime();
+    return PADDING + ((t - minMs) / (maxMs - minMs)) * (width - 2 * PADDING);
+  };
+
+  const nsX = PADDING + (width - 2 * PADDING);
+
+  // Hover tooltip clamping
+  const tipX = tooltipData
+    ? Math.min(Math.max(tooltipData.x, TOOLTIP_W / 2 + 4), width - TOOLTIP_W / 2 - 4)
+    : 0;
+  const arrowShift = tooltipData ? tooltipData.x - tipX : 0;
+
+  // Helper: render a tooltip card (shared between hover + auto)
+  const renderCard = ({ key, x, title, date, preview, color, isNS, visible, zIndex = 20 }) => {
+    const clamped     = Math.min(Math.max(x, TOOLTIP_W / 2 + 4), width - TOOLTIP_W / 2 - 4);
+    const arrow       = x - clamped;
+    const borderColor = color + "33";
+    return (
+      <div
+        key={key}
+        style={{
+          position: "absolute",
+          left: clamped,
+          top: LINE_Y + 22,
+          width: TOOLTIP_W,
+          transform: visible
+            ? "translateX(-50%) translateY(0)"
+            : "translateX(-50%) translateY(5px)",
+          opacity: visible ? 1 : 0,
+          transition: "opacity 0.5s ease, transform 0.5s ease",
+          background: "#fff",
+          border: `1px solid ${borderColor}`,
+          borderRadius: 10,
+          padding: "10px 13px",
+          boxShadow: "0 4px 18px rgba(0,66,102,0.08)",
+          zIndex,
+          pointerEvents: "none",
+          fontFamily: "Poppins, sans-serif",
+        }}
+      >
+        {/* Arrow pointing up to the dot */}
+        <div style={{
+          position: "absolute", top: -6,
+          left: `calc(50% + ${arrow}px)`,
+          transform: "translateX(-50%) rotate(45deg)",
+          width: 10, height: 10,
+          background: "#fff",
+          borderLeft: `1px solid ${borderColor}`,
+          borderTop: `1px solid ${borderColor}`,
+        }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+          <div style={{ width: 7, height: 7, flexShrink: 0, borderRadius: isNS ? 2 : "50%", background: color }} />
+          <span style={{ fontSize: 10, color, fontWeight: 700, letterSpacing: "0.04em" }}>{date}</span>
+        </div>
+        <p style={{ fontSize: 11, fontWeight: 700, color: "#004266", margin: "0 0 4px", lineHeight: 1.35 }}>
+          {title}
+        </p>
+        {preview && (
+          <p style={{
+            fontSize: 11, color: "#7a8086", margin: 0, lineHeight: 1.5,
+            display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+          }}>
+            {preview}
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  const autoIds = new Set(autoPair.map((e) => e.id));
+
+  return (
+    <div ref={containerRef} style={{ position: "relative", height: 172, userSelect: "none" }}>
+      {width > 0 && (
+        <>
+          {/* Gradient timeline line */}
+          <div style={{
+            position: "absolute", top: LINE_Y, left: PADDING,
+            width: (nextStep ? nsX : toX(sorted[sorted.length - 1].date)) - PADDING,
+            height: 4, borderRadius: 4,
+            background: "linear-gradient(to right, #008af8 0%, #00d4ff 80%, #ffb800 100%)",
+          }} />
+
+          {/* Event dots */}
+          {sorted.map((event) => {
+            const cfg     = TYPE_CONFIG[event.type] || TYPE_CONFIG["One on One Coaching"];
+            const x       = toX(event.date);
+            const isHover = tooltipData?.id === event.id;
+            const isAuto  = !isHovering && autoIds.has(event.id) && autoVisible;
+            return (
+              <div
+                key={event.id}
+                onClick={() => onEventClick(event)}
+                onMouseEnter={() => showTooltip({ id: event.id, x, event, color: cfg.color })}
+                onMouseLeave={hideTooltip}
+                style={{
+                  position: "absolute", left: x, top: LINE_Y,
+                  width: DOT_R * 2, height: DOT_R * 2, borderRadius: "50%",
+                  background: cfg.color, border: "2.5px solid #fff",
+                  boxShadow: `0 2px 10px ${cfg.color}66`,
+                  transform: `translate(-50%, -50%) scale(${isHover ? 1.5 : isAuto ? 1.25 : 1})`,
+                  cursor: "pointer", zIndex: 3,
+                  transition: "transform 0.3s ease",
+                }}
+              />
+            );
+          })}
+
+          {/* Next Step diamond */}
+          {nextStep && (
+            <div
+              className="tl-diamond"
+              onClick={() => onEventClick({ ...nextStep, _isNextStep: true })}
+              onMouseEnter={() => showTooltip({ id: "ns", x: nsX, isNS: true, color: "#ffb800" })}
+              onMouseLeave={hideTooltip}
+              style={{
+                position: "absolute", left: nsX, top: LINE_Y,
+                width: 16, height: 16, background: "#ffb800",
+                borderRadius: 3, border: "2.5px solid #fff",
+                boxShadow: "0 2px 12px rgba(255,184,0,0.55)",
+                transform: "translate(-50%, -50%) rotate(45deg)",
+                cursor: "pointer", zIndex: 3,
+              }}
+            />
+          )}
+
+          {/* Start date label */}
+          <span style={{
+            position: "absolute", left: PADDING, top: LINE_Y + 14,
+            fontSize: 11, color: "#7a8086", fontWeight: 600,
+            fontFamily: "Poppins, sans-serif", transform: "translateX(-50%)", whiteSpace: "nowrap",
+          }}>
+            {fmtShort(sorted[0].date)}
+          </span>
+
+          {/* End label */}
+          {nextStep ? (
+            <span style={{
+              position: "absolute", left: nsX, top: LINE_Y + 14,
+              fontSize: 11, color: "#f57800", fontWeight: 700,
+              fontFamily: "Poppins, sans-serif", transform: "translateX(-50%)", whiteSpace: "nowrap",
+            }}>
+              Up Next
+            </span>
+          ) : (
+            <span style={{
+              position: "absolute", left: toX(sorted[sorted.length - 1].date), top: LINE_Y + 14,
+              fontSize: 11, color: "#7a8086", fontWeight: 600,
+              fontFamily: "Poppins, sans-serif", transform: "translateX(-50%)", whiteSpace: "nowrap",
+            }}>
+              {fmtShort(sorted[sorted.length - 1].date)}
+            </span>
+          )}
+
+          {/* ── Auto-play tooltips (2 at a time) ── */}
+          {!isHovering && autoPair.map((event) => {
+            const cfg = TYPE_CONFIG[event.type] || TYPE_CONFIG["One on One Coaching"];
+            return renderCard({
+              key: `auto-${event.id}`,
+              x: toX(event.date),
+              title: event.name,
+              date: fmt(event.date),
+              preview: event.takeaway || event.analysis || "",
+              color: cfg.color,
+              isNS: false,
+              visible: autoVisible,
+              zIndex: 10,
+            });
+          })}
+
+          {/* ── Hover tooltip (always on top) ── */}
+          {tooltipData && (() => {
+            const { event, isNS, color } = tooltipData;
+            return renderCard({
+              key: "hover",
+              x: tipX + arrowShift,  // pass real dot X so clamping works correctly
+              title: isNS ? "Coaching Compass" : event?.name || "",
+              date:  isNS ? "Up Next" : event ? fmt(event.date) : "",
+              preview: isNS
+                ? stripMarkdown(nextStep?.suggestion || "")
+                : (event?.takeaway || event?.analysis || ""),
+              color,
+              isNS,
+              visible: tooltipVisible,
+              zIndex: 20,
+            });
+          })()}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Spine Row ────────────────────────────────────────────────────────────────
+
+function SpineRow({ dotColor, isFirst, isLast, isDiamond, children }) {
+  const lineColor = "#e8ecf0";
+  return (
+    <div style={{ display: "flex", alignItems: "stretch", gap: 16 }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 32, flexShrink: 0 }}>
+        <div style={{ height: 20, width: 2, background: isFirst ? "transparent" : lineColor }} />
+        {isDiamond ? (
+          <div
+            className="tl-diamond"
+            style={{
+              width: 16, height: 16,
+              background: dotColor,
+              borderRadius: 3,
+              border: "3px solid #fff",
+              boxShadow: `0 0 0 2.5px ${dotColor}`,
+              transform: "rotate(45deg)",
+              flexShrink: 0, zIndex: 1,
+            }}
+          />
+        ) : (
+          <div style={{
+            width: 14, height: 14,
+            borderRadius: "50%",
+            background: dotColor,
+            border: "3px solid #fff",
+            boxShadow: `0 0 0 2.5px ${dotColor}`,
+            flexShrink: 0, zIndex: 1,
+          }} />
+        )}
+        <div style={{ flex: 1, width: 2, background: isLast ? "transparent" : lineColor, minHeight: 8 }} />
+      </div>
+      <div style={{ flex: 1, paddingBottom: 14 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 // ─── Event Detail Modal ───────────────────────────────────────────────────────
 
@@ -83,13 +414,8 @@ function EventModal({ item, onClose, onRegenerateNextStep }) {
 
   const handleRegenerate = async () => {
     if (!onRegenerateNextStep || isRegenerating) return;
-
     setIsRegenerating(true);
-    try {
-      await onRegenerateNextStep();
-    } finally {
-      setIsRegenerating(false);
-    }
+    try { await onRegenerateNextStep(); } finally { setIsRegenerating(false); }
   };
 
   return (
@@ -110,47 +436,29 @@ function EventModal({ item, onClose, onRegenerateNextStep }) {
         maxHeight: "88vh", overflowY: "auto",
         boxShadow: "0 24px 80px rgba(0,66,102,0.22)",
       }}>
-        {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <span style={{
-                background: cfg.color,
-                color: isNextStep ? "#343a40" : "#fff",
+                background: cfg.color, color: isNextStep ? "#343a40" : "#fff",
                 borderRadius: 20, padding: "4px 14px",
-                fontSize: 11, fontWeight: 600,
-                fontFamily: "Poppins, sans-serif",
+                fontSize: 11, fontWeight: 600, fontFamily: "Poppins, sans-serif",
                 textTransform: "uppercase", letterSpacing: "0.08em",
               }}>
                 {cfg.label}
               </span>
               {isNextStep && (
-                <button
-                  type="button"
-                  onClick={handleRegenerate}
-                  disabled={isRegenerating}
-                  style={{
-                    background: "#fff7db",
-                    color: "#9b6b00",
-                    border: "1px solid #ffd76a",
-                    borderRadius: 999,
-                    padding: "5px 10px",
-                    fontFamily: "Poppins, sans-serif",
-                    fontSize: 11,
-                    fontWeight: 600,
-                    cursor: isRegenerating ? "wait" : "pointer",
-                    opacity: isRegenerating ? 0.7 : 1,
-                  }}
-                >
+                <button type="button" onClick={handleRegenerate} disabled={isRegenerating} style={{
+                  background: "#fff7db", color: "#9b6b00", border: "1px solid #ffd76a",
+                  borderRadius: 999, padding: "5px 10px", fontFamily: "Poppins, sans-serif",
+                  fontSize: 11, fontWeight: 600, cursor: isRegenerating ? "wait" : "pointer",
+                  opacity: isRegenerating ? 0.7 : 1,
+                }}>
                   {isRegenerating ? "Regenerating..." : "Regenerate"}
                 </button>
               )}
             </div>
-            <h2 style={{
-              fontFamily: '"Source Serif Pro", serif',
-              fontSize: 26, fontWeight: 600,
-              color: "#f57800", margin: "10px 0 4px",
-            }}>
+            <h2 style={{ fontFamily: '"Source Serif Pro", serif', fontSize: 26, fontWeight: 600, color: "#f57800", margin: "10px 0 4px" }}>
               {isNextStep ? "Coaching Compass" : item.name}
             </h2>
             {!isNextStep && (
@@ -160,96 +468,55 @@ function EventModal({ item, onClose, onRegenerateNextStep }) {
             )}
           </div>
           <button onClick={onClose} style={{
-            background: "#f0f4fa", border: "none",
-            fontSize: 20, cursor: "pointer", color: "#7a8086",
+            background: "#f0f4fa", border: "none", fontSize: 20, cursor: "pointer", color: "#7a8086",
             width: 36, height: 36, borderRadius: "50%",
             display: "flex", alignItems: "center", justifyContent: "center",
             flexShrink: 0, marginLeft: 12,
           }}>×</button>
         </div>
 
-        {/* Next-step card */}
         {isNextStep && (
           <div style={{
             background: "linear-gradient(135deg,#fffbf0,#fff8e1)",
-            border: "1.5px solid #ffb80040",
-            borderRadius: 14, padding: "24px 28px",
+            border: "1.5px solid #ffb80040", borderRadius: 14, padding: "24px 28px",
             display: "flex", alignItems: "center", gap: 20,
           }}>
             <div style={{
-              width: 54, height: 54, background: "#ffb800",
-              borderRadius: 14, display: "flex",
-              alignItems: "center", justifyContent: "center",
+              width: 54, height: 54, background: "#ffb800", borderRadius: 14,
+              display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 26, flexShrink: 0,
             }}>⚡</div>
             <div>
               <p style={{ fontFamily: "Poppins, sans-serif", fontSize: 12, color: "#7a8086", margin: 0, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                 Suggested Next Step
               </p>
-              <ReactMarkdown
-                components={{
-                  p: ({ children }) => (
-                    <p
-                      style={{
-                        fontFamily: "Poppins, sans-serif",
-                        fontSize: 15,
-                        color: "#585f66",
-                        margin: "8px 0 0",
-                        lineHeight: 1.7,
-                        fontWeight: 500,
-                      }}
-                    >
-                      {children}
-                    </p>
-                  ),
-                  strong: ({ children }) => (
-                    <strong style={{ color: "#343a40", fontWeight: 700 }}>
-                      {children}
-                    </strong>
-                  ),
-                }}
-              >
+              <ReactMarkdown components={{
+                p: ({ children }) => (
+                  <p style={{ fontFamily: "Poppins, sans-serif", fontSize: 15, color: "#585f66", margin: "8px 0 0", lineHeight: 1.7, fontWeight: 500 }}>{children}</p>
+                ),
+                strong: ({ children }) => (
+                  <strong style={{ color: "#343a40", fontWeight: 700 }}>{children}</strong>
+                ),
+              }}>
                 {item.suggestion || item.name || "Continue the coaching journey with Ally."}
               </ReactMarkdown>
-              <button
-                type="button"
-                style={{
-                  marginTop: 18,
-                  background: "#fff",
-                  color: "#008af8",
-                  border: "1px solid #cfe7fb",
-                  borderRadius: 999,
-                  padding: "10px 18px",
-                  fontFamily: "Poppins, sans-serif",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  boxShadow: "0 8px 18px rgba(0,66,102,0.12)",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "#eaf5ff";
-                  e.currentTarget.style.borderColor = "#9fd0fb";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "#fff";
-                  e.currentTarget.style.borderColor = "#cfe7fb";
-                }}
+              <button type="button" style={{
+                marginTop: 18, background: "#fff", color: "#008af8",
+                border: "1px solid #cfe7fb", borderRadius: 999, padding: "10px 18px",
+                fontFamily: "Poppins, sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                boxShadow: "0 8px 18px rgba(0,66,102,0.12)",
+                display: "inline-flex", alignItems: "center", gap: 8,
+              }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#eaf5ff"; e.currentTarget.style.borderColor = "#9fd0fb"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = "#cfe7fb"; }}
               >
-                <img
-                  src="/img/ally_icon.svg"
-                  alt="AceUp Ally"
-                  style={{ width: 16, height: 16, display: "block" }}
-                />
+                <img src="/img/ally_icon.svg" alt="AceUp Ally" style={{ width: 16, height: 16, display: "block" }} />
                 Chat with Ally
               </button>
             </div>
           </div>
         )}
 
-        {/* Analysis + Chart */}
         {!isNextStep && (
           <>
             {item.takeaway && (
@@ -280,11 +547,9 @@ function EventModal({ item, onClose, onRegenerateNextStep }) {
               <ResponsiveContainer width="100%" height={Math.max(chartData.length * 44, 140)}>
                 <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 48, left: 148, bottom: 0 }}>
                   <XAxis type="number" domain={[0, 35]} tickFormatter={(v) => `${v}%`}
-                    tick={{ fontFamily: "Poppins", fontSize: 11, fill: "#7a8086" }}
-                    axisLine={false} tickLine={false} />
+                    tick={{ fontFamily: "Poppins", fontSize: 11, fill: "#7a8086" }} axisLine={false} tickLine={false} />
                   <YAxis type="category" dataKey="name" width={160} interval={0}
-                    tick={{ fontFamily: "Poppins", fontSize: 12, fill: "#585f66" }}
-                    axisLine={false} tickLine={false} />
+                    tick={{ fontFamily: "Poppins", fontSize: 12, fill: "#585f66" }} axisLine={false} tickLine={false} />
                   <Tooltip
                     formatter={(v) => [`${v}%`, "Signal strength"]}
                     labelFormatter={(l) => chartData.find((d) => d.name === l)?.fullName || l}
@@ -306,23 +571,9 @@ function EventModal({ item, onClose, onRegenerateNextStep }) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function Timeline({ events, nextStep, startDate, endDate, onDateChange, onRegenerateNextStep }) {
-  const [selected, setSelected]     = useState(null);
-  const [activeType, setActiveType] = useState(null);
-  const scrollRef                   = useRef(null);
-  const outerRef                    = useRef(null);
-  const [outerWidth, setOuterWidth] = useState(0);
-
-  // Measure the scrollable viewport width
-  useEffect(() => {
-    const el = outerRef.current;
-    if (!el) return;
-    const obs = new ResizeObserver(([entry]) => {
-      setOuterWidth(entry.contentRect.width);
-    });
-    obs.observe(el);
-    setOuterWidth(el.getBoundingClientRect().width);
-    return () => obs.disconnect();
-  }, []);
+  const [selected, setSelected]       = useState(null);
+  const [activeType, setActiveType]   = useState(null);
+  const [listExpanded, setListExpanded] = useState(true);
 
   useEffect(() => {
     if (selected?._isNextStep) {
@@ -342,41 +593,14 @@ export default function Timeline({ events, nextStep, startDate, endDate, onDateC
     });
   }, [events, startDate, endDate, activeType]);
 
-  const groups = useMemo(() => groupByDate(filtered), [filtered]);
+  // Chronological groups (oldest → newest) for the visual graph label
+  const monthGroups = useMemo(() => groupByMonth(filtered), [filtered]);
 
-  // ── Pixel-based slot positions ────────────────────────────────────────────
-
-  const totalSlots = groups.length + (nextStep ? 1 : 0);
-
-  // Minimum track width to keep slots at least MIN_SLOT_W apart
-  const minTrackW = totalSlots <= 1
-    ? MARGIN * 2 + 200
-    : MARGIN * 2 + (totalSlots - 1) * MIN_SLOT_W;
-
-  // Fill the container when few events; scroll when many
-  const trackWidth = outerWidth > 0 ? Math.max(outerWidth, minTrackW) : minTrackW;
-
-  // Pixel X centre for slot index i
-  const slotXPx = (i) => {
-    if (totalSlots <= 1) return trackWidth / 2;
-    return MARGIN + (i / (totalSlots - 1)) * (trackWidth - 2 * MARGIN);
-  };
-
-  const groupSlotX = groups.map((_, i) => slotXPx(i));
-  const nextStepX  = nextStep ? slotXPx(totalSlots - 1) : null;
-
-  // Line endpoints match first and last slot
-  const lineLeft  = slotXPx(0);
-  const lineRight = slotXPx(totalSlots - 1);
-
-  const canScroll = trackWidth > outerWidth + 2;
-
-  // ── Scroll helpers ───────────────────────────────────────────────────────
-
-  const scroll = (dir) =>
-    scrollRef.current?.scrollBy({ left: dir * 400, behavior: "smooth" });
-
-  // ── Legend toggle ────────────────────────────────────────────────────────
+  // Reversed groups (newest → oldest) for the collapsible card list
+  const monthGroupsDesc = useMemo(
+    () => [...monthGroups].reverse().map((m) => ({ ...m, events: [...m.events].reverse() })),
+    [monthGroups]
+  );
 
   const toggleType = (type) =>
     setActiveType((prev) => (prev === type ? null : type));
@@ -385,21 +609,15 @@ export default function Timeline({ events, nextStep, startDate, endDate, onDateC
 
   return (
     <div style={{ fontFamily: "Poppins, sans-serif" }}>
-      <div>
-        <DateFilter
-          startDate={startDate}
-          endDate={endDate}
-          onChange={onDateChange}
-          embedded
-        />
-      </div>
 
-      {/* ── Legend ── */}
+      {/* ── Date Filter ── */}
+      <DateFilter startDate={startDate} endDate={endDate} onChange={onDateChange} embedded />
+
+      {/* ── Type Filter ── */}
       <div style={{
-        padding: "18px 32px",
-        background: "#fff",
-        display: "flex", gap: 8, flexWrap: "wrap",
-        alignItems: "center",
+        padding: "14px 32px", background: "#fff",
+        display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center",
+        borderBottom: "1px solid #f0f4fa",
       }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: "#7a8086", marginRight: 6 }}>
           FILTER BY TYPE:
@@ -407,301 +625,214 @@ export default function Timeline({ events, nextStep, startDate, endDate, onDateC
         {Object.entries(TYPE_CONFIG)
           .filter(([key]) => key !== "nextStep")
           .map(([key, { color, label }]) => {
-          const isActive = activeType === key;
-          const isDimmed = activeType && activeType !== key;
-          return (
-            <button
-              key={key}
-              onClick={() => toggleType(key)}
-              style={{
+            const isActive = activeType === key;
+            const isDimmed = activeType && activeType !== key;
+            return (
+              <button key={key} onClick={() => toggleType(key)} style={{
                 display: "flex", alignItems: "center", gap: 7,
-                padding: "6px 14px", borderRadius: 20, cursor: "pointer",
+                padding: "5px 12px", borderRadius: 20, cursor: "pointer",
                 border: `1.5px solid ${isActive ? color : "#e8ecf0"}`,
                 background: isActive ? color + "18" : "#fff",
                 opacity: isDimmed ? 0.4 : 1,
                 transition: "all 0.18s ease",
                 fontFamily: "Poppins, sans-serif",
-              }}
-            >
-              <div style={{
-                width: 11,
-                height: 11,
-                borderRadius: "50%",
-                background: color,
-                flexShrink: 0,
-              }} />
-              <span style={{
-                fontSize: 12, fontWeight: isActive ? 700 : 500,
-                color: isActive ? color : "#585f66",
-                whiteSpace: "nowrap",
               }}>
-                {label}
-              </span>
-            </button>
-          );
-        })}
+                <div style={{ width: 9, height: 9, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                <span style={{ fontSize: 12, fontWeight: isActive ? 700 : 500, color: isActive ? color : "#585f66", whiteSpace: "nowrap" }}>
+                  {label}
+                </span>
+              </button>
+            );
+          })}
         {activeType && (
-          <button
-            onClick={() => setActiveType(null)}
-            style={{
-              padding: "6px 12px", borderRadius: 20,
-              border: "1.5px solid #dbdbdb",
-              background: "#fff", cursor: "pointer",
-              fontFamily: "Poppins, sans-serif",
-              fontSize: 11, color: "#7a8086", fontWeight: 600,
-            }}
-          >
+          <button onClick={() => setActiveType(null)} style={{
+            padding: "5px 12px", borderRadius: 20, border: "1.5px solid #dbdbdb",
+            background: "#fff", cursor: "pointer",
+            fontFamily: "Poppins, sans-serif", fontSize: 11, color: "#7a8086", fontWeight: 600,
+          }}>
             ✕ Clear
           </button>
         )}
       </div>
 
-      {/* ── Track ── */}
       {filtered.length === 0 ? (
         <div style={{ textAlign: "center", padding: "64px 0", color: "#7a8086", fontSize: 14 }}>
           No sessions match the current filters.
         </div>
       ) : (
-        <div style={{ position: "relative" }} ref={outerRef}>
-          {/* Scroll arrows — only when content overflows */}
-          {canScroll && ["left","right"].map((dir) => (
+        <>
+          {/* ── Visual Graph Timeline ── */}
+          <div style={{ padding: "20px 32px 8px", borderBottom: "1px solid #f0f4fa" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#7a8086", fontFamily: "Poppins, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                Journey Overview
+              </span>
+              <span style={{ fontSize: 12, color: "#7a8086", fontFamily: "Poppins, sans-serif", fontWeight: 600 }}>
+                {filtered.length} session{filtered.length !== 1 ? "s" : ""}
+                {nextStep && <> · <span style={{ color: "#f57800" }}>1 upcoming</span></>}
+              </span>
+            </div>
+            <VisualTimeline
+              events={filtered}
+              nextStep={nextStep}
+              onEventClick={(item) => setSelected(item)}
+            />
+          </div>
+
+          {/* ── Collapsible Session History ── */}
+          <div>
+            {/* Toggle header */}
             <button
-              key={dir}
-              onClick={() => scroll(dir === "right" ? 1 : -1)}
+              onClick={() => setListExpanded((p) => !p)}
               style={{
-                position: "absolute",
-                [dir]: 0, top: "50%",
-                transform: "translateY(-50%)",
-                zIndex: 10,
+                width: "100%",
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "16px 32px",
                 background: "#fff",
-                border: "1.5px solid #e8ecf0",
-                borderRadius: "50%",
-                width: 40, height: 40,
-                display: "flex", alignItems: "center", justifyContent: "center",
+                border: "none",
+                borderBottom: listExpanded ? "1px solid #f0f4fa" : "none",
                 cursor: "pointer",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
-                fontSize: 18, color: "#008af8",
-                fontWeight: 700,
+                fontFamily: "Poppins, sans-serif",
               }}
             >
-              {dir === "left" ? "‹" : "›"}
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#7a8086", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                Session History
+              </span>
+              <span style={{ fontSize: 18, color: "#7a8086", lineHeight: 1 }}>
+                {listExpanded ? "▾" : "▸"}
+              </span>
             </button>
-          ))}
 
-          {/* Scrollable viewport */}
-          <div
-            ref={scrollRef}
-            style={{ overflowX: "auto", scrollbarWidth: "thin" }}
-          >
-            <div style={{ position: "relative", height: TRACK_H, width: trackWidth }}>
+            {listExpanded && (
+              <div style={{ padding: "8px 32px 32px", background: "#fff" }}>
 
-              {/* Gradient line — from first slot to last slot */}
-              <div style={{
-                position: "absolute",
-                top: LINE_Y,
-                left: lineLeft,
-                width: lineRight - lineLeft,
-                height: 5, borderRadius: 5,
-                background: "linear-gradient(to right, #008af8 35%, #00d4ff 101%)",
-              }} />
-
-              {/* Start cap */}
-              <div style={{
-                position: "absolute", top: LINE_Y, left: lineLeft,
-                width: 14, height: 14, borderRadius: "50%",
-                background: "#008af8",
-                transform: "translate(-50%, -50%)",
-              }} />
-
-              {/* Event groups */}
-              {groups.map((group, gIdx) => {
-                const baseX = groupSlotX[gIdx];
-                return group.events.map((event, idx) => {
-                  const cfg     = TYPE_CONFIG[event.type] || TYPE_CONFIG["One on One Coaching"];
-                  const isAbove = idx % 2 === 0;
-                  const nudge   = group.events.length > 1 ? (idx === 0 ? -NUDGE_PX : NUDGE_PX) : 0;
-                  const xPx     = baseX + nudge;
-                  const hasTakeaway = Boolean(event.takeaway);
-
-                  const dotCY      = LINE_Y + (isAbove ? -V_OFFSET : V_OFFSET);
-                  const connTop    = isAbove ? dotCY + DOT_R : LINE_Y;
-                  const connH      = isAbove ? LINE_Y - dotCY - DOT_R : dotCY - DOT_R - LINE_Y;
-                  const nameCssTop = isAbove
-                    ? dotCY - DOT_R - 52
-                    : dotCY + DOT_R + 28;
-                  const dateCssTop = isAbove ? dotCY + DOT_R + 8  : dotCY - DOT_R - 26;
-                  const takeawayCssTop = LINE_Y + 30;
-
-                  return (
-                    <div key={event.id}>
-                      {/* Connector */}
-                      <div style={{
-                        position: "absolute",
-                        left: xPx, top: connTop,
-                        width: 1.5, height: connH,
-                        background: cfg.color, opacity: 0.4,
-                        transform: "translateX(-50%)",
-                      }} />
-
-                      {/* Dot */}
-                      <div
-                        onClick={() => setSelected(event)}
-                        style={{
-                          position: "absolute",
-                          left: xPx, top: dotCY,
-                          width: DOT_R * 2, height: DOT_R * 2,
-                          borderRadius: "50%",
-                          background: cfg.color,
-                          border: "4px solid #fff",
-                          boxShadow: `0 3px 14px ${cfg.color}55`,
-                          transform: "translate(-50%, -50%)",
-                          cursor: "pointer",
-                          transition: "transform 0.18s, box-shadow 0.18s",
-                          zIndex: 4,
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = "translate(-50%,-50%) scale(1.45)";
-                          e.currentTarget.style.boxShadow = `0 5px 20px ${cfg.color}99`;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = "translate(-50%,-50%) scale(1)";
-                          e.currentTarget.style.boxShadow = `0 3px 14px ${cfg.color}55`;
-                        }}
-                      />
-
-                      {/* Date */}
-                      <div style={{
-                        position: "absolute",
-                        left: xPx, top: dateCssTop,
-                        transform: "translateX(-50%)",
-                        fontSize: 12, color: "#7a8086",
-                        fontWeight: 600, whiteSpace: "nowrap",
-                        pointerEvents: "none",
+                {/* Next Step at the very top (most "recent" / upcoming) */}
+                {nextStep && (
+                  <SpineRow dotColor="#ffb800" isFirst isLast={false} isDiamond>
+                    <div
+                      onClick={() => setSelected({ ...nextStep, _isNextStep: true })}
+                      style={{
+                        background: "linear-gradient(135deg, #fffbf0 0%, #fff3d6 100%)",
+                        borderRadius: 12, padding: "14px 18px",
+                        border: "2px solid #ffb800", borderLeft: "4px solid #f57800",
+                        cursor: "pointer", transition: "box-shadow 0.18s, transform 0.12s",
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "0 4px 20px rgba(255,184,0,0.25)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.transform = "translateY(0)"; }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <span style={{
+                          background: "#ffb80022", color: "#7a4800",
+                          border: "1px solid #ffb80044", borderRadius: 999, padding: "3px 10px",
+                          fontSize: 11, fontWeight: 700, fontFamily: "Poppins, sans-serif",
+                          textTransform: "uppercase", letterSpacing: "0.06em",
+                        }}>⚡ Up Next</span>
+                      </div>
+                      <h3 style={{ fontFamily: '"Source Serif Pro", serif', fontSize: 17, fontWeight: 600, color: "#004266", margin: "0 0 8px" }}>
+                        Coaching Compass
+                      </h3>
+                      <p style={{
+                        fontFamily: "Poppins, sans-serif", fontSize: 13, color: "#585f66",
+                        lineHeight: 1.6, margin: 0,
+                        display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
                       }}>
-                        {fmtShort(event.date)}
-                      </div>
+                        {stripMarkdown(nextStep.suggestion) || "Continue the coaching journey with Ally."}
+                      </p>
+                    </div>
+                  </SpineRow>
+                )}
 
-                      {/* Name */}
-                      <div
-                        onClick={() => setSelected(event)}
-                        style={{
-                          position: "absolute",
-                          left: xPx, top: nameCssTop,
-                          transform: "translateX(-50%)",
-                          width: 160,
-                          textAlign: "center",
-                          color: "#343a40",
-                          cursor: "pointer",
-                          lineHeight: 1.35,
-                        }}
-                      >
-                        <span style={{ fontSize: 12, fontWeight: 700 }}>
-                          {event.name}
+                {/* Events: most recent month first, most recent event first within each month */}
+                {monthGroupsDesc.map((month, mIdx) => {
+                  const isLastMonth = mIdx === monthGroupsDesc.length - 1;
+                  return (
+                    <div key={month.key}>
+                      {/* Month separator */}
+                      <div style={{
+                        display: "flex", alignItems: "center", gap: 12,
+                        margin: "20px 0 4px", paddingLeft: 48,
+                      }}>
+                        <span style={{
+                          fontSize: 11, fontWeight: 700, color: "#aab0b8",
+                          textTransform: "uppercase", letterSpacing: "0.12em", whiteSpace: "nowrap",
+                        }}>
+                          {month.label}
                         </span>
+                        <div style={{ flex: 1, height: 1, background: "#e8ecf0" }} />
                       </div>
 
-                      {hasTakeaway && (
-                        <div
-                          onClick={() => setSelected(event)}
-                          style={{
-                            position: "absolute",
-                            left: xPx,
-                            top: takeawayCssTop,
-                            transform: "translateX(-50%)",
-                            width: 140,
-                            textAlign: "center",
-                            fontSize: 11,
-                            fontWeight: 500,
-                            color: "#7a8086",
-                            lineHeight: 1.35,
-                            cursor: "pointer",
-                            whiteSpace: "normal",
-                            wordBreak: "break-word",
-                          }}
-                        >
-                          {event.takeaway}
-                        </div>
-                      )}
+                      {/* Event cards */}
+                      {month.events.map((event, eIdx) => {
+                        const cfg       = TYPE_CONFIG[event.type] || TYPE_CONFIG["One on One Coaching"];
+                        const topComps  = getTopCompetencies(event.signals);
+                        const snippet   = event.takeaway || event.analysis || "";
+                        const isFirst   = !nextStep && mIdx === 0 && eIdx === 0;
+                        const isLast    = isLastMonth && eIdx === month.events.length - 1;
+
+                        return (
+                          <SpineRow key={event.id} dotColor={cfg.color} isFirst={isFirst} isLast={isLast}>
+                            <div
+                              onClick={() => setSelected(event)}
+                              style={{
+                                background: "#f9fbfd", borderRadius: 12, padding: "14px 18px",
+                                border: "1px solid #eaeff5", borderLeft: `3px solid ${cfg.color}`,
+                                cursor: "pointer", transition: "box-shadow 0.18s, transform 0.12s",
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "0 4px 20px rgba(0,66,102,0.11)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.transform = "translateY(0)"; }}
+                            >
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                                <span style={{
+                                  background: cfg.color + "18", color: cfg.color,
+                                  border: `1px solid ${cfg.color}44`, borderRadius: 999, padding: "3px 10px",
+                                  fontSize: 11, fontWeight: 700, fontFamily: "Poppins, sans-serif",
+                                  textTransform: "uppercase", letterSpacing: "0.06em",
+                                }}>
+                                  {cfg.label}
+                                </span>
+                                <span style={{ fontSize: 12, color: "#7a8086", fontWeight: 600, fontFamily: "Poppins, sans-serif" }}>
+                                  {fmt(event.date)}
+                                </span>
+                              </div>
+                              <h3 style={{ fontFamily: '"Source Serif Pro", serif', fontSize: 17, fontWeight: 600, color: "#004266", margin: "0 0 10px", lineHeight: 1.3 }}>
+                                {event.name}
+                              </h3>
+                              {topComps.length > 0 && (
+                                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: snippet ? 10 : 0 }}>
+                                  {topComps.map((comp) => {
+                                    const color = getCompetencyColor(comp);
+                                    return (
+                                      <span key={comp} style={{
+                                        background: color + "15", color,
+                                        border: `1px solid ${color}40`, borderRadius: 999, padding: "3px 10px",
+                                        fontSize: 11, fontWeight: 600, fontFamily: "Poppins, sans-serif",
+                                      }}>
+                                        {COMPETENCY_SHORT[comp] || comp}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              {snippet && (
+                                <p style={{
+                                  fontFamily: "Poppins, sans-serif", fontSize: 13, color: "#585f66",
+                                  lineHeight: 1.6, margin: 0,
+                                  display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+                                }}>
+                                  {snippet}
+                                </p>
+                              )}
+                            </div>
+                          </SpineRow>
+                        );
+                      })}
                     </div>
                   );
-                });
-              })}
-
-              {/* ── Next Step ── */}
-              {nextStep && nextStepX !== null && (() => {
-                const xPx     = nextStepX;
-                const cfg     = TYPE_CONFIG.nextStep;
-                const dotCY   = LINE_Y - V_OFFSET;
-                const connTop = dotCY + DOT_R;
-                const connH   = LINE_Y - dotCY - DOT_R;
-
-                return (
-                  <div key="nextStep">
-                    <div style={{
-                      position: "absolute",
-                      left: xPx, top: connTop,
-                      width: 1.5, height: connH,
-                      background: cfg.color, opacity: 0.55,
-                      transform: "translateX(-50%)",
-                    }} />
-
-                    {/* Diamond */}
-                    <div
-                      onClick={() => setSelected({ ...nextStep, _isNextStep: true })}
-                      style={{
-                        position: "absolute",
-                        left: xPx, top: dotCY,
-                        width: DOT_R * 2, height: DOT_R * 2,
-                        borderRadius: 3,
-                        background: cfg.color,
-                        border: "4px solid #fff",
-                        boxShadow: `0 3px 14px ${cfg.color}66`,
-                        transform: "translate(-50%,-50%) rotate(45deg)",
-                        cursor: "pointer",
-                        transition: "transform 0.18s",
-                        zIndex: 4,
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = "translate(-50%,-50%) rotate(45deg) scale(1.45)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = "translate(-50%,-50%) rotate(45deg) scale(1)";
-                      }}
-                    />
-
-                    {/* Label */}
-                    <div style={{
-                      position: "absolute",
-                      left: xPx, top: dotCY + DOT_R + 8,
-                      transform: "translateX(-50%)",
-                      fontSize: 12, color: cfg.color,
-                      fontWeight: 700, whiteSpace: "nowrap",
-                    }}>
-                      Upcoming
-                    </div>
-
-                    {/* Name */}
-                    <div
-                      onClick={() => setSelected({ ...nextStep, _isNextStep: true })}
-                      style={{
-                        position: "absolute",
-                        left: xPx, top: dotCY - DOT_R - 52,
-                        transform: "translateX(-50%)",
-                        width: 140, textAlign: "center",
-                        fontSize: 12, fontWeight: 700,
-                        color: "#343a40", cursor: "pointer",
-                        lineHeight: 1.35,
-                      }}
-                    >
-                      Next Step
-                    </div>
-                  </div>
-                );
-              })()}
-
-            </div>
+                })}
+              </div>
+            )}
           </div>
-        </div>
+        </>
       )}
 
       <EventModal
